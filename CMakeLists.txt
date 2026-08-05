@@ -51,9 +51,27 @@ target_link_libraries(test_object_table_concurrent PRIVATE remedy_headers)
 add_test(NAME test_object_table_concurrent COMMAND test_object_table_concurrent)
 set_tests_properties(test_object_table_concurrent PROPERTIES TIMEOUT 10)
 
+add_library(remedy_worker_win32 STATIC
+    src/native/platform/win32/worker_win32.cpp
+)
+target_link_libraries(remedy_worker_win32 PRIVATE remedy_headers)
+
+add_executable(remedy_worker_fixture
+    src/host/win32/remedy_worker_fixture.cpp
+)
+target_link_libraries(remedy_worker_fixture PRIVATE remedy_headers)
+
+add_executable(test_worker_start_containment
+    tests/native/test_worker_start_containment.cpp
+    src/native/platform/win32/worker_win32.cpp
+)
+target_link_libraries(test_worker_start_containment PRIVATE remedy_headers)
+target_compile_definitions(test_worker_start_containment PRIVATE REMEDY_TEST_STAGED_FAILURE_SEAM)
+add_test(NAME test_worker_start_containment COMMAND test_worker_start_containment $<TARGET_FILE:remedy_worker_fixture>)
+set_tests_properties(test_worker_start_containment PROPERTIES TIMEOUT 15)
+
 # Explicitly Deferred Recovered Sources (Require semantic repair or missing implementations):
 # - src/native/platform/win32/channel_win32.cpp (platform worker/channel integration deferred)
-# - src/native/platform/win32/worker_win32.cpp (platform worker/channel integration deferred)
 # - tests/native/test_collapse.cpp (missing domain.h header)
 # - tests/native/test_echo_slice.cpp (missing domain.h header)
 # - src/managed/Remedy.EchoWorker/Program.cs (C# managed runtime deferred)
