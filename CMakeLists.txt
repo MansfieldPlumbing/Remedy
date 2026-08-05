@@ -79,6 +79,14 @@ target_compile_definitions(test_worker_token_rundown PRIVATE REMEDY_TEST_WORKER_
 add_test(NAME test_worker_token_rundown COMMAND test_worker_token_rundown $<TARGET_FILE:remedy_worker_fixture>)
 set_tests_properties(test_worker_token_rundown PROPERTIES TIMEOUT 25)
 
+add_executable(test_worker_tree_containment
+    tests/native/test_worker_tree_containment.cpp
+    src/native/platform/win32/worker_win32.cpp
+)
+target_link_libraries(test_worker_tree_containment PRIVATE remedy_headers)
+target_compile_definitions(test_worker_tree_containment PRIVATE REMEDY_TEST_WORKER_TREE_SEAM)
+add_test(NAME test_worker_tree_containment COMMAND test_worker_tree_containment $<TARGET_FILE:remedy_worker_fixture>)
+set_tests_properties(test_worker_tree_containment PROPERTIES TIMEOUT 60)
 
 # Explicitly Deferred Recovered Sources (Require semantic repair or missing implementations):
 # - src/native/platform/win32/channel_win32.cpp (platform worker/channel integration deferred)
