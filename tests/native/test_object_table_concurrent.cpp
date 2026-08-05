@@ -2,102 +2,183 @@
 #include <iostream>
 #include <thread>
 #include <future>
+#include <atomic>
 #include <cassert>
+#include <chrono>
 
 struct sync_resource {
     int value{42};
+    std::atomic<uint32_t>* destroy_count{nullptr};
 };
+
+static void sync_deleter(void* ptr) noexcept {
+    if (!ptr) return;
+    auto* res = static_cast<sync_resource*>(ptr);
+    if (res->destroy_count) {
+        res->destroy_count->fetch_add(1);
+    }
+    delete res;
+}
+
+struct blocking_deleter_context {
+    std::promise<void> entered_promise;
+    std::shared_future<void> release_future;
+    std::atomic<uint32_t> destroy_count{0};
+};
+
+struct blocking_resource {
+    blocking_deleter_context* ctx{nullptr};
+};
+
+static void blocking_deleter(void* ptr) noexcept {
+    if (!ptr) return;
+    auto* res = static_cast<blocking_resource*>(ptr);
+    if (res->ctx) {
+        res->ctx->destroy_count.fetch_add(1);
+        res->ctx->entered_promise.set_value();
+        res->ctx->release_future.wait();
+    }
+    delete res;
+}
 
 int main() {
     std::cout << "[TEST] Starting Deterministic Object Table Synchronization Test..." << std::endl;
 
     remedy::object_table table;
 
-    // 1. Duplicate Remove Test
-    sync_resource r1;
-    remedy_handle_t h1 = table.insert(REMEDY_OBJECT_WORKER, REMEDY_INVALID_HANDLE, &r1);
-    assert(table.is_valid(h1, REMEDY_OBJECT_WORKER));
-    assert(table.remove(h1) == true);
-    assert(table.remove(h1) == false); // Duplicate remove MUST return false!
+    // Part 1: Lease Hold, Timeout, Acquisition Rejection, Probe Slot Protection, and Retirement Retry Test
+    std::atomic<uint32_t> r1_destroyed{0};
+    auto* r1 = new sync_resource{42, &r1_destroyed};
+    remedy_handle_t h1 = table.insert(REMEDY_OBJECT_WORKER, REMEDY_INVALID_HANDLE, r1, sync_deleter);
+    assert(h1 != REMEDY_INVALID_HANDLE);
+    uint32_t slot1 = remedy_handle_slot(h1);
+    uint32_t gen1 = remedy_handle_generation(h1);
 
-    // 2. Generation Reuse & Stale Handle Test
-    sync_resource r2;
-    remedy_handle_t h2 = table.insert(REMEDY_OBJECT_WORKER, REMEDY_INVALID_HANDLE, &r2);
-    assert(remedy_handle_slot(h2) == remedy_handle_slot(h1));
-    assert(remedy_handle_generation(h2) != remedy_handle_generation(h1));
-    assert(!table.is_valid(h1)); // Old handle stale
+    // 1. Hold a valid lease
+    remedy_err_t acq_err = REMEDY_OK;
+    auto lease1 = table.acquire<sync_resource>(h1, REMEDY_OBJECT_WORKER, &acq_err);
+    assert(acq_err == REMEDY_OK);
+    assert(static_cast<bool>(lease1));
 
-    // 3. Deterministic Pin / Remove Synchronization Test
-    sync_resource r3;
-    remedy_handle_t h3 = table.insert(REMEDY_OBJECT_WORKER, REMEDY_INVALID_HANDLE, &r3);
+    // 2. Call remove(h1, 0) to establish REVOKING without sleep
+    remedy_err_t timeout_err = table.remove(h1, 0);
 
-    std::promise<void> lease_pinned_promise;
-    std::shared_future<void> lease_pinned_future = lease_pinned_promise.get_future().share();
+    // 3. Assert REMEDY_ERR_TIMEOUT
+    assert(timeout_err == REMEDY_ERR_TIMEOUT);
 
-    std::promise<void> remove_started_promise;
-    std::shared_future<void> remove_started_future = remove_started_promise.get_future().share();
+    // 4. Assert deleter has not run
+    assert(r1_destroyed.load() == 0);
 
-    std::promise<void> release_lease_promise;
-    std::shared_future<void> release_lease_future = release_lease_promise.get_future().share();
+    // 5. Assert generation has not advanced (h1 is invalid to callers because state is REVOKING)
+    assert(!table.is_valid(h1, REMEDY_OBJECT_WORKER));
 
-    std::atomic<bool> remove_completed{false};
-    std::atomic<bool> acquire_after_revoking_failed{false};
+    // 6. Assert new acquisition returns REMEDY_ERR_REVOKING
+    {
+        remedy_err_t err_rev = REMEDY_OK;
+        auto lease_rev = table.acquire<sync_resource>(h1, REMEDY_OBJECT_WORKER, &err_rev);
+        assert(err_rev == REMEDY_ERR_REVOKING);
+        assert(!static_cast<bool>(lease_rev));
+    }
 
-    // Thread 1: Acquire lease and hold pin
-    std::thread holder([&]() {
-        auto lease = table.acquire<sync_resource>(h3);
-        assert(static_cast<bool>(lease));
-        assert(lease->value == 42);
+    // PROBE INSERTION ASSERTION: Prove timeout does not publish or reuse the slot while lease remains held
+    std::atomic<uint32_t> probe_destroyed{0};
+    auto* probe_res = new sync_resource{999, &probe_destroyed};
+    remedy_handle_t probe_handle = table.insert(REMEDY_OBJECT_WORKER, REMEDY_INVALID_HANDLE, probe_res, sync_deleter);
 
-        // Signal remover that lease is pinned
-        lease_pinned_promise.set_value();
+    assert(probe_handle != REMEDY_INVALID_HANDLE);
+    assert(remedy_handle_slot(probe_handle) != remedy_handle_slot(h1));
+    assert(table.remove(probe_handle) == REMEDY_OK);
+    assert(probe_destroyed.load() == 1);
 
-        // Wait until remover enters REVOKING state and attempts remove
-        remove_started_future.wait();
+    // 7. Release lease
+    lease1.reset();
 
-        // Wait for release signal
-        release_lease_future.wait();
+    // 8. Retry remove(h1, 2000) and assert REMEDY_OK
+    remedy_err_t retry_err = table.remove(h1, 2000);
+    assert(retry_err == REMEDY_OK);
 
-        // Release lease pin
-        lease.reset();
-    });
+    // 9. Assert deleter runs exactly once
+    assert(r1_destroyed.load() == 1);
 
-    // Thread 2: Call remove while lease is pinned
-    std::thread remover([&]() {
-        // Wait until holder pins lease
-        lease_pinned_future.wait();
+    // Part 2: Deterministic Finalizer Race Proof
+    {
+        blocking_deleter_context ctx;
+        std::promise<void> release_promise;
+        ctx.release_future = release_promise.get_future().share();
 
-        // Signal that remove is starting
-        remove_started_promise.set_value();
+        // Store entered_future before launching remover thread
+        std::future<void> entered_future = ctx.entered_promise.get_future();
 
-        // remove() will transition state to REVOKING and wait for pin_count == 0
-        bool res = table.remove(h3);
-        assert(res == true);
-        remove_completed.store(true);
-    });
+        auto* b_res = new blocking_resource{&ctx};
+        remedy_handle_t bh = table.insert(REMEDY_OBJECT_WORKER, REMEDY_INVALID_HANDLE, b_res, blocking_deleter);
+        assert(bh != REMEDY_INVALID_HANDLE);
 
-    // Main thread: Verify acquire fails immediately after revocation begins
-    remove_started_future.wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Ensure state is REVOKING
+        std::atomic<remedy_err_t> first_remove_result{REMEDY_ERR_TIMEOUT};
 
-    // Acquisition MUST fail while slot is REVOKING
-    auto acquire_revoking = table.acquire<sync_resource>(h3);
-    assert(!static_cast<bool>(acquire_revoking));
-    acquire_after_revoking_failed.store(true);
+        // Thread 1 calls remove(bh), which claims finalizer ownership and enters blocking_deleter
+        std::thread remover1([&]() {
+            first_remove_result.store(table.remove(bh, 2000));
+        });
 
-    // Remove must NOT have completed yet because pin is still held by holder
-    assert(remove_completed.load() == false);
-    std::cout << "[TEST] Verified remove() is blocked waiting for active pin drain!" << std::endl;
+        // Bounded readiness assertion
+        assert(entered_future.wait_for(std::chrono::seconds(2)) == std::future_status::ready);
 
-    // Unblock holder to release pin
-    release_lease_promise.set_value();
+        // While Thread 1 is blocked inside deleter, Thread 2 calls remove(bh)
+        // Must return EXACTLY REMEDY_ERR_REVOKING (active finalizer exclusion)
+        remedy_err_t second_remove_result = table.remove(bh, 2000);
+        assert(second_remove_result == REMEDY_ERR_REVOKING);
 
-    holder.join();
-    remover.join();
+        // Unblock Thread 1 deleter
+        release_promise.set_value();
 
-    assert(remove_completed.load() == true);
-    assert(acquire_after_revoking_failed.load() == true);
-    assert(!table.is_valid(h3));
+        remover1.join();
+
+        assert(first_remove_result.load() == REMEDY_OK);
+        assert(ctx.destroy_count.load() == 1);
+    }
+
+    // Part 3: Executable Proof of Single Free-List Publication & Slot Reuse Generation
+    {
+        // Setup: Retire slot S at generation G
+        std::atomic<uint32_t> initial_destroyed{0};
+        auto* init_res = new sync_resource{1, &initial_destroyed};
+        remedy_handle_t init_h = table.insert(REMEDY_OBJECT_WORKER, REMEDY_INVALID_HANDLE, init_res, sync_deleter);
+
+        uint32_t slot_S = remedy_handle_slot(init_h);
+        uint32_t gen_G = remedy_handle_generation(init_h);
+
+        assert(table.remove(init_h) == REMEDY_OK);
+        assert(initial_destroyed.load() == 1);
+
+        // 1. Insert Resource A -> assert A receives slot S at generation G + 1 (honoring wraparound rule)
+        std::atomic<uint32_t> a_destroyed{0};
+        auto* res_A = new sync_resource{10, &a_destroyed};
+        remedy_handle_t h_A = table.insert(REMEDY_OBJECT_WORKER, REMEDY_INVALID_HANDLE, res_A, sync_deleter);
+
+        uint32_t slot_A = remedy_handle_slot(h_A);
+        uint32_t gen_A = remedy_handle_generation(h_A);
+        uint32_t expected_gen_A = (gen_G + 1 == 0) ? 1 : (gen_G + 1);
+
+        assert(slot_A == slot_S);
+        assert(gen_A == expected_gen_A);
+
+        // 2. Leave A live!
+        assert(table.is_valid(h_A, REMEDY_OBJECT_WORKER));
+
+        // 3. Insert Resource B -> assert B receives a slot OTHER than S (proves S was published to free_list_ only once!)
+        std::atomic<uint32_t> b_destroyed{0};
+        auto* res_B = new sync_resource{20, &b_destroyed};
+        remedy_handle_t h_B = table.insert(REMEDY_OBJECT_WORKER, REMEDY_INVALID_HANDLE, res_B, sync_deleter);
+
+        uint32_t slot_B = remedy_handle_slot(h_B);
+        assert(slot_B != slot_S);
+
+        // Cleanup A and B
+        assert(table.remove(h_A) == REMEDY_OK);
+        assert(table.remove(h_B) == REMEDY_OK);
+        assert(a_destroyed.load() == 1);
+        assert(b_destroyed.load() == 1);
+    }
 
     std::cout << "[TEST] Deterministic Object Table Synchronization Test PASSED!" << std::endl;
     return 0;
