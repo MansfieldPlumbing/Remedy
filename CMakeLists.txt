@@ -70,6 +70,16 @@ target_compile_definitions(test_worker_start_containment PRIVATE REMEDY_TEST_STA
 add_test(NAME test_worker_start_containment COMMAND test_worker_start_containment $<TARGET_FILE:remedy_worker_fixture>)
 set_tests_properties(test_worker_start_containment PROPERTIES TIMEOUT 15)
 
+add_executable(test_worker_token_rundown
+    tests/native/test_worker_token_rundown.cpp
+    src/native/platform/win32/worker_win32.cpp
+)
+target_link_libraries(test_worker_token_rundown PRIVATE remedy_headers)
+target_compile_definitions(test_worker_token_rundown PRIVATE REMEDY_TEST_WORKER_RUNDOWN_SEAM)
+add_test(NAME test_worker_token_rundown COMMAND test_worker_token_rundown $<TARGET_FILE:remedy_worker_fixture>)
+set_tests_properties(test_worker_token_rundown PROPERTIES TIMEOUT 25)
+
+
 # Explicitly Deferred Recovered Sources (Require semantic repair or missing implementations):
 # - src/native/platform/win32/channel_win32.cpp (platform worker/channel integration deferred)
 # - tests/native/test_collapse.cpp (missing domain.h header)
