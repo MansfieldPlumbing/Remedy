@@ -10,14 +10,35 @@ This document describes the canonical local build system for the Remedy project.
 - **CTest**: Test driver bundled with CMake (`ctest.exe`).
 - **PowerShell**: PowerShell 5.1 or PowerShell Core.
 
-## Toolchain & Checkout-Relative Environment
+## Toolchain & Dual-Mode Environment Management
 
-All repository-internal include and build paths are derived dynamically relative to the checkout root (`$PSScriptRoot` in `build.ps1`).
+`build.ps1` operates using a strict dual-mode process-local toolchain discovery mechanism.
 
-Toolchain discovery paths (MSVC compiler binaries, Windows SDK, CMake, and dotnet) are configured **process-locally** within `build.ps1` for the duration of the PowerShell build process and its child commands:
-1. `build.ps1` prefers tools already present in the process `PATH`.
-2. Documented `S:\bin` toolchain directories are used as process-local fallbacks when present.
-3. No persistent environment mutation (User or Machine `PATH` modification) is part of the build procedure.
+### Mode A — Existing Developer Environment
+
+When an initialized Visual Studio Developer PowerShell or Developer Command Prompt provides `cl`, `cmake`, `ctest`, non-empty `INCLUDE`, and non-empty `LIB`:
+- `build.ps1` preserves the process environment (`PATH`, `INCLUDE`, `LIB`) **byte-for-byte**.
+- It does not inspect, prepend, rewrite, or normalize host environment variables.
+- It does not activate any `S:\bin` fallback paths.
+
+### Mode B — Local Remedy Workstation Fallback
+
+When no active MSVC developer environment is detected (i.e. `cl`, `INCLUDE`, and `LIB` are completely absent):
+- `build.ps1` activates the complete, coherent `S:\bin` workstation toolchain strictly within process scope.
+- Prior to activation, `build.ps1` verifies the presence of all required `S:\bin` compiler, SDK, header, and library directories.
+- Fallback activation modifies `$env:PATH`, `$env:INCLUDE`, and `$env:LIB` strictly process-locally within a `try/finally` block.
+- Upon completion or failure of configure, build, or testing, the original process environment values are restored in `finally`.
+
+### Partial or Conflicting Environments
+
+If `cl`, `INCLUDE`, or `LIB` are partially initialized (for example, `cl` is present but `INCLUDE` or `LIB` is empty, or `INCLUDE` is set without `cl`), `build.ps1` fails fast with a clear error and refuses to activate fallback mode.
+
+### Explicit Environment Rules
+
+- **Repository Include Paths**: Repository include paths (`include/`, `src/`, `src/native/core/`) are controlled exclusively by CMake target include declarations. `build.ps1` never injects repository directories into `$env:INCLUDE`.
+- **Workstation Fallback Independence**: `S:\bin` is a local workstation fallback and is **not a repository requirement**.
+- **No Persistent Mutation**: Persistent environment mutation (`User` or `Machine` scope via `setx` or `[Environment]::SetEnvironmentVariable`) is strictly forbidden.
+- **CI Environment**: Continuous Integration (CI) runners will initialize their own hosted MSVC developer environment (Mode A).
 
 ### Static MSVC C Runtime Selection
 
