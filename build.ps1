@@ -6,8 +6,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# Configure environment paths for MSVC compiler, CMake, and Debug CRT DLLs
-$env:PATH = "C:\bin\cmake\bin;S:\bin\vs\VC\Redist\MSVC\14.51.36223\debug_nonredist\x64\Microsoft.VC145.DebugCRT;S:\bin\Windows Kits\10\bin\10.0.26100.0\x64\ucrt;S:\bin\msvc\bin\Hostx64\x64;S:\bin\msvc;S:\bin\Windows Kits\10\bin\10.0.26100.0\x64;S:\bin\platform-tools;S:\bin\nuget;S:\bin\dotnet;$env:PATH"
+# Configure process-local environment paths for MSVC compiler, SDK, CMake, and tools.
+# Note: Debug CRT DLL directories (e.g. debug_nonredist) are NOT included or required
+# because native targets statically link the MSVC C runtime library (/MT /MTd).
+$env:PATH = "C:\bin\cmake\bin;S:\bin\msvc\bin\Hostx64\x64;S:\bin\msvc;S:\bin\Windows Kits\10\bin\10.0.26100.0\x64;S:\bin\platform-tools;S:\bin\nuget;S:\bin\dotnet;$env:PATH"
 $env:INCLUDE = "S:\Remedy\include;S:\Remedy\src;S:\Remedy\src\native\core;S:\bin\msvc\include;S:\bin\Windows Kits\10\Include\10.0.26100.0\ucrt;S:\bin\Windows Kits\10\Include\10.0.26100.0\um;S:\bin\Windows Kits\10\Include\10.0.26100.0\shared;S:\bin\Windows Kits\10\Include\10.0.26100.0\winrt"
 $env:LIB = "S:\bin\msvc\lib\x64;S:\bin\Windows Kits\10\Lib\10.0.26100.0\ucrt\x64;S:\bin\Windows Kits\10\Lib\10.0.26100.0\um\x64"
 
