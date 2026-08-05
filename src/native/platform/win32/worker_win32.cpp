@@ -799,3 +799,88 @@ void remedy_test_get_final_counts(
 
 } // extern "C"
 #endif
+
+#ifdef REMEDY_TEST_WORKER_TREE_SEAM
+extern "C" {
+
+bool remedy_test_worker_job_get_policy(
+    remedy_worker_token_t token,
+    uint32_t* out_limit_flags,
+    uint32_t* out_active_processes
+) {
+    if (out_limit_flags) *out_limit_flags = 0;
+    if (out_active_processes) *out_active_processes = 0;
+    if (!out_limit_flags || !out_active_processes) return false;
+
+    std::lock_guard<std::mutex> lock(g_worker_mutex);
+    auto it = g_worker_table.find(token);
+    if (it == g_worker_table.end()) return false;
+
+    win32_worker_entry* entry = it->second;
+    std::lock_guard<std::mutex> elock(entry->entry_mutex);
+
+    if (entry->state != worker_entry_state::LIVE || entry->job_handle == NULL) return false;
+
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
+    if (!QueryInformationJobObject(entry->job_handle, JobObjectExtendedLimitInformation, &limits, sizeof(limits), nullptr)) {
+        return false;
+    }
+
+    JOBOBJECT_BASIC_ACCOUNTING_INFORMATION accounting{};
+    if (!QueryInformationJobObject(entry->job_handle, JobObjectBasicAccountingInformation, &accounting, sizeof(accounting), nullptr)) {
+        return false;
+    }
+
+    *out_limit_flags = limits.BasicLimitInformation.LimitFlags;
+    *out_active_processes = accounting.ActiveProcesses;
+    return true;
+}
+
+bool remedy_test_worker_job_contains_pid(
+    remedy_worker_token_t token,
+    uint32_t pid,
+    bool* out_contains
+) {
+    if (out_contains) *out_contains = false;
+    if (!out_contains || pid == 0) return false;
+
+    std::lock_guard<std::mutex> lock(g_worker_mutex);
+    auto it = g_worker_table.find(token);
+    if (it == g_worker_table.end()) return false;
+
+    win32_worker_entry* entry = it->second;
+    std::lock_guard<std::mutex> elock(entry->entry_mutex);
+
+    if (entry->state != worker_entry_state::LIVE || entry->job_handle == NULL) return false;
+
+    constexpr DWORD kMaxPids = 64;
+    constexpr size_t kBufferSize = offsetof(JOBOBJECT_BASIC_PROCESS_ID_LIST, ProcessIdList) + kMaxPids * sizeof(ULONG_PTR);
+    static_assert(kBufferSize <= (std::numeric_limits<DWORD>::max)(), "Buffer size exceeds DWORD limit");
+
+    alignas(JOBOBJECT_BASIC_PROCESS_ID_LIST) uint8_t rawBuffer[kBufferSize]{};
+    PJOBOBJECT_BASIC_PROCESS_ID_LIST pList = reinterpret_cast<PJOBOBJECT_BASIC_PROCESS_ID_LIST>(rawBuffer);
+
+    if (!QueryInformationJobObject(entry->job_handle, JobObjectBasicProcessIdList, pList, static_cast<DWORD>(kBufferSize), nullptr)) {
+        return false;
+    }
+
+    if (pList->NumberOfAssignedProcesses > kMaxPids ||
+        pList->NumberOfProcessIdsInList > kMaxPids ||
+        pList->NumberOfProcessIdsInList != pList->NumberOfAssignedProcesses) {
+        return false;
+    }
+
+    bool found = false;
+    for (DWORD i = 0; i < pList->NumberOfProcessIdsInList; ++i) {
+        if (pList->ProcessIdList[i] == static_cast<ULONG_PTR>(pid)) {
+            found = true;
+            break;
+        }
+    }
+
+    *out_contains = found;
+    return true;
+}
+
+} // extern "C"
+#endif
