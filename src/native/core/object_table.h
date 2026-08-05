@@ -69,7 +69,9 @@ public:
     void reset() {
         if (slot_) {
             std::lock_guard<std::mutex> lock(slot_->slot_mutex);
-            assert(slot_->pin_count > 0);
+            if (slot_->pin_count == 0) {
+                std::abort(); // Unconditional fail-fast if pin_count == 0 before decrement
+            }
             slot_->pin_count--;
             if (slot_->pin_count == 0) {
                 slot_->slot_cv.notify_all();
@@ -90,7 +92,6 @@ public:
     static constexpr size_t MAX_CHUNKS = 1024;
 
     object_table();
-    explicit object_table(size_t initial_capacity);
     ~object_table();
 
     remedy_handle_t insert(remedy_object_type_t type, remedy_handle_t owner_domain, void* resource_ptr, remedy_deleter_fn deleter);
@@ -135,8 +136,9 @@ public:
         }
 
         // 5. State LIVE, generation valid, type valid, resource valid -> increment pin and return REMEDY_OK
-        assert(slot->state == REMEDY_SLOT_LIVE);
-        assert(slot->resource_ptr != nullptr);
+        if (slot->state != REMEDY_SLOT_LIVE || slot->resource_ptr == nullptr) {
+            std::abort(); // Unconditional fail-fast on malformed internal state
+        }
 
         slot->pin_count++;
         if (out_err) *out_err = REMEDY_OK;

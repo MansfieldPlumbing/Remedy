@@ -6,10 +6,6 @@ object_table::object_table() {
     ensure_capacity(CHUNK_SIZE - 1);
 }
 
-object_table::object_table(size_t initial_capacity) {
-    ensure_capacity(static_cast<uint32_t>(initial_capacity > 0 ? initial_capacity - 1 : CHUNK_SIZE - 1));
-}
-
 object_table::~object_table() {
     std::unique_lock<std::mutex> table_lock(mutex_);
 

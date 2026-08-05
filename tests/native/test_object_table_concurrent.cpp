@@ -4,6 +4,7 @@
 #include <future>
 #include <atomic>
 #include <cassert>
+#include <chrono>
 
 struct sync_resource {
     int value{42};
@@ -43,9 +44,9 @@ static void blocking_deleter(void* ptr) noexcept {
 int main() {
     std::cout << "[TEST] Starting Deterministic Object Table Synchronization Test..." << std::endl;
 
-    remedy::object_table table(16);
+    remedy::object_table table;
 
-    // Part 1: Lease Hold, Timeout, Acquisition Rejection, and Retirement Retry Test (Points 1 - 10)
+    // Part 1: Lease Hold, Timeout, Acquisition Rejection, Probe Slot Protection, and Retirement Retry Test
     std::atomic<uint32_t> r1_destroyed{0};
     auto* r1 = new sync_resource{42, &r1_destroyed};
     remedy_handle_t h1 = table.insert(REMEDY_OBJECT_WORKER, REMEDY_INVALID_HANDLE, r1, sync_deleter);
@@ -59,7 +60,7 @@ int main() {
     assert(acq_err == REMEDY_OK);
     assert(static_cast<bool>(lease1));
 
-    // 2. Call remove(handle, 0) to establish REVOKING without sleep
+    // 2. Call remove(h1, 0) to establish REVOKING without sleep
     remedy_err_t timeout_err = table.remove(h1, 0);
 
     // 3. Assert REMEDY_ERR_TIMEOUT
@@ -68,13 +69,10 @@ int main() {
     // 4. Assert deleter has not run
     assert(r1_destroyed.load() == 0);
 
-    // 5. Assert generation has not advanced
-    assert(!table.is_valid(h1, REMEDY_OBJECT_WORKER)); // In REVOKING, is_valid returns false because state != LIVE
+    // 5. Assert generation has not advanced (h1 is invalid to callers because state is REVOKING)
+    assert(!table.is_valid(h1, REMEDY_OBJECT_WORKER));
 
-    // 6. Assert slot has not been reused
-    assert(table.live_count() == 0); // Slot is REVOKING, so live_count is 0, but slot is not in free_list_
-
-    // 7. Assert new acquisition returns REMEDY_ERR_REVOKING
+    // 6. Assert new acquisition returns REMEDY_ERR_REVOKING
     {
         remedy_err_t err_rev = REMEDY_OK;
         auto lease_rev = table.acquire<sync_resource>(h1, REMEDY_OBJECT_WORKER, &err_rev);
@@ -82,21 +80,34 @@ int main() {
         assert(!static_cast<bool>(lease_rev));
     }
 
-    // 8. Release lease
+    // PROBE INSERTION ASSERTION: Prove timeout does not publish or reuse the slot while lease remains held
+    std::atomic<uint32_t> probe_destroyed{0};
+    auto* probe_res = new sync_resource{999, &probe_destroyed};
+    remedy_handle_t probe_handle = table.insert(REMEDY_OBJECT_WORKER, REMEDY_INVALID_HANDLE, probe_res, sync_deleter);
+
+    assert(probe_handle != REMEDY_INVALID_HANDLE);
+    assert(remedy_handle_slot(probe_handle) != remedy_handle_slot(h1));
+    assert(table.remove(probe_handle) == REMEDY_OK);
+    assert(probe_destroyed.load() == 1);
+
+    // 7. Release lease
     lease1.reset();
 
-    // 9. Retry remove(handle, 2000) and assert REMEDY_OK
+    // 8. Retry remove(h1, 2000) and assert REMEDY_OK
     remedy_err_t retry_err = table.remove(h1, 2000);
     assert(retry_err == REMEDY_OK);
 
-    // 10. Assert deleter runs exactly once
+    // 9. Assert deleter runs exactly once
     assert(r1_destroyed.load() == 1);
 
-    // Part 2: Deterministic Finalizer Race Proof (Point 11)
+    // Part 2: Deterministic Finalizer Race Proof
     {
         blocking_deleter_context ctx;
         std::promise<void> release_promise;
         ctx.release_future = release_promise.get_future().share();
+
+        // Store entered_future before launching remover thread
+        std::future<void> entered_future = ctx.entered_promise.get_future();
 
         auto* b_res = new blocking_resource{&ctx};
         remedy_handle_t bh = table.insert(REMEDY_OBJECT_WORKER, REMEDY_INVALID_HANDLE, b_res, blocking_deleter);
@@ -109,8 +120,8 @@ int main() {
             first_remove_result.store(table.remove(bh, 2000));
         });
 
-        // Wait until blocking_deleter is entered by Thread 1
-        ctx.entered_promise.get_future().wait();
+        // Bounded readiness assertion
+        assert(entered_future.wait_for(std::chrono::seconds(2)) == std::future_status::ready);
 
         // While Thread 1 is blocked inside deleter, Thread 2 calls remove(bh)
         // Must return EXACTLY REMEDY_ERR_REVOKING (active finalizer exclusion)
@@ -126,7 +137,7 @@ int main() {
         assert(ctx.destroy_count.load() == 1);
     }
 
-    // Part 3: Executable Proof of Single Free-List Publication & Slot Reuse Generation (Points 12 & 13)
+    // Part 3: Executable Proof of Single Free-List Publication & Slot Reuse Generation
     {
         // Setup: Retire slot S at generation G
         std::atomic<uint32_t> initial_destroyed{0};

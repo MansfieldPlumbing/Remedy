@@ -24,14 +24,14 @@ int main() {
 
     // 4. Invalid Insertion Rejection Test (null resource or null deleter)
     {
-        remedy::object_table table(16);
+        remedy::object_table table;
         dummy_resource* dummy = new dummy_resource();
         assert(table.insert(REMEDY_OBJECT_WORKER, REMEDY_INVALID_HANDLE, nullptr, dummy_deleter) == REMEDY_INVALID_HANDLE);
         assert(table.insert(REMEDY_OBJECT_WORKER, REMEDY_INVALID_HANDLE, dummy, nullptr) == REMEDY_INVALID_HANDLE);
         delete dummy;
     }
 
-    remedy::object_table table(16);
+    remedy::object_table table;
     assert(table.live_count() == 0);
 
     std::atomic<uint32_t> r1_destroyed{0};
@@ -108,7 +108,7 @@ int main() {
     {
         std::atomic<uint32_t> scoped_destroyed{0};
         {
-            remedy::object_table scoped_table(8);
+            remedy::object_table scoped_table;
             auto* scoped_res = new dummy_resource{999, "scoped", &scoped_destroyed};
             remedy_handle_t scoped_h = scoped_table.insert(REMEDY_OBJECT_WORKER, REMEDY_INVALID_HANDLE, scoped_res, dummy_deleter);
             assert(scoped_h != REMEDY_INVALID_HANDLE);

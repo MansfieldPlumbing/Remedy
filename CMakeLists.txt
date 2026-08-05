@@ -49,6 +49,7 @@ add_executable(test_object_table_concurrent
 )
 target_link_libraries(test_object_table_concurrent PRIVATE remedy_headers)
 add_test(NAME test_object_table_concurrent COMMAND test_object_table_concurrent)
+set_tests_properties(test_object_table_concurrent PROPERTIES TIMEOUT 10)
 
 # Explicitly Deferred Recovered Sources (Require semantic repair or missing implementations):
 # - src/native/platform/win32/channel_win32.cpp (platform worker/channel integration deferred)
