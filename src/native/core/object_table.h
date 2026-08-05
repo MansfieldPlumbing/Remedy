@@ -10,21 +10,26 @@
 #include <vector>
 #include <cassert>
 #include <chrono>
+#include <cstdlib>
 
 namespace remedy {
+
+using remedy_deleter_fn = void (*)(void* resource) noexcept;
 
 class object_table;
 
 struct object_slot {
-    std::atomic<uint32_t> generation{1};
-    std::atomic<remedy_object_type_t> type{REMEDY_OBJECT_NONE};
-    std::atomic<remedy_handle_t> owner_domain{REMEDY_INVALID_HANDLE};
-    std::atomic<remedy_slot_state_t> state{REMEDY_SLOT_FREE};
-    std::atomic<uint32_t> pin_count{0};
+    uint32_t generation{1};
+    remedy_object_type_t type{REMEDY_OBJECT_NONE};
+    remedy_handle_t owner_domain{REMEDY_INVALID_HANDLE};
+    remedy_slot_state_t state{REMEDY_SLOT_FREE};
+    uint32_t pin_count{0};
     void* resource_ptr{nullptr};
+    remedy_deleter_fn deleter{nullptr};
+    bool rundown_active{false};
 
-    std::mutex pin_mutex;
-    std::condition_variable pin_cv;
+    mutable std::mutex slot_mutex;
+    std::condition_variable slot_cv;
 };
 
 template <typename T>
@@ -63,10 +68,11 @@ public:
 
     void reset() {
         if (slot_) {
-            if (slot_->pin_count.fetch_sub(1, std::memory_order_release) == 1) {
-                // Last pin released -> notify waiting remove()
-                std::lock_guard<std::mutex> lock(slot_->pin_mutex);
-                slot_->pin_cv.notify_all();
+            std::lock_guard<std::mutex> lock(slot_->slot_mutex);
+            assert(slot_->pin_count > 0);
+            slot_->pin_count--;
+            if (slot_->pin_count == 0) {
+                slot_->slot_cv.notify_all();
             }
             slot_ = nullptr;
             ptr_ = nullptr;
@@ -84,37 +90,56 @@ public:
     static constexpr size_t MAX_CHUNKS = 1024;
 
     object_table();
+    explicit object_table(size_t initial_capacity);
     ~object_table();
 
-    remedy_handle_t insert(remedy_object_type_t type, remedy_handle_t owner_domain, void* resource_ptr);
-    bool remove(remedy_handle_t handle);
+    remedy_handle_t insert(remedy_object_type_t type, remedy_handle_t owner_domain, void* resource_ptr, remedy_deleter_fn deleter);
+    remedy_err_t remove(remedy_handle_t handle, uint32_t timeout_ms = 2000);
     bool is_valid(remedy_handle_t handle, remedy_object_type_t expected_type = REMEDY_OBJECT_NONE) const;
 
     template <typename T>
-    object_lease<T> acquire(remedy_handle_t handle, remedy_object_type_t expected_type = REMEDY_OBJECT_NONE) {
+    object_lease<T> acquire(remedy_handle_t handle, remedy_object_type_t expected_type = REMEDY_OBJECT_NONE, remedy_err_t* out_err = nullptr) {
         uint32_t slot_idx = remedy_handle_slot(handle);
         uint32_t gen = remedy_handle_generation(handle);
 
         object_slot* slot = get_slot(slot_idx);
-        if (!slot) return {};
-
-        // Check state == LIVE before pinning
-        if (slot->state.load(std::memory_order_acquire) != REMEDY_SLOT_LIVE) return {};
-
-        // Pin slot
-        slot->pin_count.fetch_add(1, std::memory_order_relaxed);
-
-        // Re-validate state, generation, and type post-pin
-        if (slot->state.load(std::memory_order_acquire) != REMEDY_SLOT_LIVE ||
-            slot->generation.load(std::memory_order_relaxed) != gen ||
-            (expected_type != REMEDY_OBJECT_NONE && slot->type.load(std::memory_order_relaxed) != expected_type)) {
-            if (slot->pin_count.fetch_sub(1, std::memory_order_release) == 1) {
-                std::lock_guard<std::mutex> lock(slot->pin_mutex);
-                slot->pin_cv.notify_all();
-            }
+        if (!slot) {
+            if (out_err) *out_err = REMEDY_ERR_HANDLE_STALE;
             return {};
         }
 
+        std::lock_guard<std::mutex> lock(slot->slot_mutex);
+
+        // 1. Generation mismatch -> REMEDY_ERR_HANDLE_STALE
+        if (slot->generation != gen) {
+            if (out_err) *out_err = REMEDY_ERR_HANDLE_STALE;
+            return {};
+        }
+
+        // 2. State FREE or RETIRED -> REMEDY_ERR_HANDLE_STALE
+        if (slot->state == REMEDY_SLOT_FREE || slot->state == REMEDY_SLOT_RETIRED) {
+            if (out_err) *out_err = REMEDY_ERR_HANDLE_STALE;
+            return {};
+        }
+
+        // 3. State REVOKING -> REMEDY_ERR_REVOKING
+        if (slot->state == REMEDY_SLOT_REVOKING) {
+            if (out_err) *out_err = REMEDY_ERR_REVOKING;
+            return {};
+        }
+
+        // 4. Expected-type mismatch -> REMEDY_ERR_WRONG_TYPE
+        if (expected_type != REMEDY_OBJECT_NONE && slot->type != expected_type) {
+            if (out_err) *out_err = REMEDY_ERR_WRONG_TYPE;
+            return {};
+        }
+
+        // 5. State LIVE, generation valid, type valid, resource valid -> increment pin and return REMEDY_OK
+        assert(slot->state == REMEDY_SLOT_LIVE);
+        assert(slot->resource_ptr != nullptr);
+
+        slot->pin_count++;
+        if (out_err) *out_err = REMEDY_OK;
         return object_lease<T>(slot, static_cast<T*>(slot->resource_ptr));
     }
 
@@ -125,7 +150,7 @@ private:
     void ensure_capacity(uint32_t slot_idx);
 
     mutable std::mutex mutex_;
-    object_slot* chunks_[MAX_CHUNKS]{nullptr};
+    std::atomic<object_slot*> chunks_[MAX_CHUNKS]{nullptr};
     std::vector<uint32_t> free_list_;
     uint32_t high_watermark_{1};
 };

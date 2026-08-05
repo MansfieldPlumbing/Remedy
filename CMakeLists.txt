@@ -36,13 +36,24 @@ target_link_libraries(test_codec_golden PRIVATE remedy_headers)
 
 add_test(NAME test_codec_golden COMMAND test_codec_golden)
 
+add_executable(test_object_table
+    tests/native/test_object_table.cpp
+    src/native/core/object_table.cpp
+)
+target_link_libraries(test_object_table PRIVATE remedy_headers)
+add_test(NAME test_object_table COMMAND test_object_table)
+
+add_executable(test_object_table_concurrent
+    tests/native/test_object_table_concurrent.cpp
+    src/native/core/object_table.cpp
+)
+target_link_libraries(test_object_table_concurrent PRIVATE remedy_headers)
+add_test(NAME test_object_table_concurrent COMMAND test_object_table_concurrent)
+
 # Explicitly Deferred Recovered Sources (Require semantic repair or missing implementations):
-# - src/native/core/object_table.cpp (missing domain_object::~domain_object implementation)
 # - src/native/platform/win32/channel_win32.cpp (platform worker/channel integration deferred)
 # - src/native/platform/win32/worker_win32.cpp (platform worker/channel integration deferred)
 # - tests/native/test_collapse.cpp (missing domain.h header)
 # - tests/native/test_echo_slice.cpp (missing domain.h header)
-# - tests/native/test_object_table.cpp (constructor signature mismatch C2665)
-# - tests/native/test_object_table_concurrent.cpp (unresolved external domain_object::~domain_object)
 # - src/managed/Remedy.EchoWorker/Program.cs (C# managed runtime deferred)
 # - src/managed/Remedy.EchoWorker/Remedy.EchoWorker.csproj (C# managed project deferred)
