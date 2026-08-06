@@ -88,8 +88,21 @@ target_compile_definitions(test_worker_tree_containment PRIVATE REMEDY_TEST_WORK
 add_test(NAME test_worker_tree_containment COMMAND test_worker_tree_containment $<TARGET_FILE:remedy_worker_fixture>)
 set_tests_properties(test_worker_tree_containment PROPERTIES TIMEOUT 60)
 
+add_library(remedy_channel_win32 STATIC
+    src/native/platform/win32/channel_win32.cpp
+)
+target_link_libraries(remedy_channel_win32 PRIVATE remedy_headers)
+
+add_executable(test_channel_lifetime
+    tests/native/test_channel_lifetime.cpp
+    src/native/platform/win32/channel_win32.cpp
+)
+target_link_libraries(test_channel_lifetime PRIVATE remedy_headers)
+target_compile_definitions(test_channel_lifetime PRIVATE REMEDY_TEST_CHANNEL_LIFETIME_SEAM)
+add_test(NAME test_channel_lifetime COMMAND test_channel_lifetime)
+set_tests_properties(test_channel_lifetime PROPERTIES TIMEOUT 480)
+
 # Explicitly Deferred Recovered Sources (Require semantic repair or missing implementations):
-# - src/native/platform/win32/channel_win32.cpp (platform worker/channel integration deferred)
 # - tests/native/test_collapse.cpp (missing domain.h header)
 # - tests/native/test_echo_slice.cpp (missing domain.h header)
 # - src/managed/Remedy.EchoWorker/Program.cs (C# managed runtime deferred)
