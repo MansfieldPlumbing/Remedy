@@ -20,7 +20,8 @@ typedef enum {
     REMEDY_WIRE_KIND_PONG        = 4,
     REMEDY_WIRE_KIND_QUIESCE     = 5,
     REMEDY_WIRE_KIND_QUIESCE_ACK = 6,
-    REMEDY_WIRE_KIND_READY       = 7
+    REMEDY_WIRE_KIND_READY       = 7,
+    REMEDY_WIRE_KIND_DATA        = 8
 } remedy_wire_kind_t;
 
 typedef struct {
@@ -155,7 +156,7 @@ static inline remedy_err_t remedy_wire_frame_decode(const uint8_t in[36], remedy
     if (hdr->version != REMEDY_WIRE_VERSION) return REMEDY_ERR_IPC_FAILURE;
     if (hdr->header_len != REMEDY_WIRE_HEADER_SIZE) return REMEDY_ERR_IPC_FAILURE;
     if (hdr->payload_len > REMEDY_MAX_PAYLOAD_SIZE) return REMEDY_ERR_INVALID_ARGUMENT;
-    if (hdr->kind < REMEDY_WIRE_KIND_REQUEST || hdr->kind > REMEDY_WIRE_KIND_READY) return REMEDY_ERR_IPC_FAILURE;
+    if (hdr->kind < REMEDY_WIRE_KIND_REQUEST || hdr->kind > REMEDY_WIRE_KIND_DATA) return REMEDY_ERR_IPC_FAILURE;
 
     return REMEDY_OK;
 }

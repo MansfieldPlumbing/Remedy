@@ -50,6 +50,13 @@ int main() {
     assert(hdr2.checksum == 0);
     std::cout << "[TEST] Decode from Golden Vector 100% successful!" << std::endl;
 
+    uint8_t data_frame[36];
+    memcpy(data_frame, GOLDEN_PING_FRAME, 36);
+    data_frame[6] = REMEDY_WIRE_KIND_DATA;
+    dec_res = remedy_wire_frame_decode(data_frame, &hdr2);
+    assert(dec_res == REMEDY_OK);
+    assert(hdr2.kind == REMEDY_WIRE_KIND_DATA);
+
     // 3. Malformed Frame Rejection Tests
     uint8_t bad_magic[36];
     memcpy(bad_magic, GOLDEN_PING_FRAME, 36);
