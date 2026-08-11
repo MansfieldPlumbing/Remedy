@@ -31,6 +31,24 @@ static bool write_exact(HANDLE handle, const void* buffer, DWORD length) {
     return true;
 }
 
+static bool inheritance_canaries_absent() {
+    char canaries[2048]{};
+    DWORD length = GetEnvironmentVariableA("REMEDY_TEST_CANARY_HANDLES", canaries, sizeof(canaries));
+    if (length == 0) return GetLastError() == ERROR_ENVVAR_NOT_FOUND;
+    if (length >= sizeof(canaries)) return false;
+
+    char* cursor = canaries;
+    while (*cursor != '\0') {
+        char* end = nullptr;
+        unsigned long long raw = _strtoui64(cursor, &end, 10);
+        if (raw == 0 || end == cursor || (*end != ',' && *end != '\0')) return false;
+        HANDLE candidate = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(raw));
+        if (SetEvent(candidate)) return false;
+        cursor = (*end == ',') ? end + 1 : end;
+    }
+    return true;
+}
+
 int main(int argc, char** argv) {
     static const char prefix[] = "--remedy-channel-handle=";
     if (argc != 2 || strncmp(argv[1], prefix, sizeof(prefix) - 1) != 0) return 2;
@@ -43,6 +61,7 @@ int main(int argc, char** argv) {
     DWORD flags = 0;
     if (!GetHandleInformation(endpoint, &flags)) return 3;
     if (GetFileType(endpoint) != FILE_TYPE_PIPE) return 3;
+    if (!inheritance_canaries_absent()) return 12;
 
     uint8_t encoded[REMEDY_WIRE_HEADER_SIZE]{};
     remedy_wire_frame_header_t request{};

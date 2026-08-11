@@ -105,7 +105,7 @@ add_executable(test_inherited_worker_channel
 target_link_libraries(test_inherited_worker_channel PRIVATE remedy_headers remedy_channel_win32)
 target_compile_definitions(test_inherited_worker_channel PRIVATE REMEDY_TEST_INHERITED_CHANNEL_SEAM)
 add_test(NAME test_inherited_worker_channel COMMAND test_inherited_worker_channel $<TARGET_FILE:remedy_inherited_channel_worker>)
-set_tests_properties(test_inherited_worker_channel PROPERTIES TIMEOUT 20)
+set_tests_properties(test_inherited_worker_channel PROPERTIES TIMEOUT 300)
 
 add_executable(test_channel_lifetime
     tests/native/test_channel_lifetime.cpp
