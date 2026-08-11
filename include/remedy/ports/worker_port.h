@@ -2,6 +2,7 @@
 #define REMEDY_WORKER_PORT_H
 
 #include "remedy/types.h"
+#include "remedy/ports/channel_port.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -15,7 +16,7 @@ typedef struct {
     const char* executable_path;
     const char* arguments;
     const char* working_directory;
-    const char* channel_nonce;
+    remedy_channel_token_t bootstrap_channel;
     uint32_t    timeout_ms;
 } remedy_worker_config_t;
 

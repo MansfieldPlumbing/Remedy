@@ -1,4 +1,5 @@
 #include "remedy/ports/worker_port.h"
+#include "channel_worker_win32.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -35,6 +36,13 @@ struct win32_worker_entry {
 static std::mutex g_worker_mutex;
 static std::unordered_map<remedy_worker_token_t, win32_worker_entry*> g_worker_table;
 static remedy_worker_token_t g_next_worker_token = 1;
+
+#ifdef REMEDY_TEST_INHERITED_CHANNEL_SEAM
+static uintptr_t g_test_last_bootstrap_locator = 0;
+extern "C" uintptr_t remedy_test_get_last_bootstrap_locator(void) {
+    return g_test_last_bootstrap_locator;
+}
+#endif
 
 #ifdef REMEDY_TEST_STAGED_FAILURE_SEAM
 static int g_test_fail_stage = 0;
@@ -309,14 +317,15 @@ remedy_err_t worker_port_start(const remedy_worker_config_t* config, remedy_work
     if (!config->executable_path || config->executable_path[0] == '\0') return REMEDY_ERR_INVALID_ARGUMENT;
 
     if (config->arguments && config->arguments[0] != '\0') return REMEDY_ERR_NOT_SUPPORTED;
-    if (config->channel_nonce && config->channel_nonce[0] != '\0') return REMEDY_ERR_NOT_SUPPORTED;
     if (config->timeout_ms != 0) return REMEDY_ERR_NOT_SUPPORTED;
 
     if (!is_valid_absolute_path(config->executable_path)) return REMEDY_ERR_INVALID_ARGUMENT;
 
     std::wstring wExecPath;
     std::wstring wWorkDir;
+    std::wstring wCommandLine;
     const wchar_t* pWorkDir = NULL;
+    wchar_t* pCommandLine = NULL;
 
     try {
         if (!convert_utf8_to_wide(config->executable_path, wExecPath)) {
@@ -329,20 +338,142 @@ remedy_err_t worker_port_start(const remedy_worker_config_t* config, remedy_work
             }
             pWorkDir = wWorkDir.c_str();
         }
+
+        if (config->bootstrap_channel != REMEDY_INVALID_CHANNEL_TOKEN) {
+            wCommandLine.reserve(wExecPath.size() + 64);
+        }
     } catch (const std::bad_alloc&) {
         return REMEDY_ERR_OUT_OF_MEMORY;
     }
 
-    STARTUPINFOW si = { sizeof(si) };
+    HANDLE bootstrap_endpoint = INVALID_HANDLE_VALUE;
+    LPPROC_THREAD_ATTRIBUTE_LIST attribute_list = NULL;
+    SIZE_T attribute_list_size = 0;
+    bool attribute_list_initialized = false;
+    bool inherit_bootstrap = false;
+
+    auto close_bootstrap_endpoint = [&]() -> bool {
+        if (bootstrap_endpoint == INVALID_HANDLE_VALUE) return true;
+        BOOL closed = CloseHandle(bootstrap_endpoint);
+        bootstrap_endpoint = INVALID_HANDLE_VALUE;
+        return closed != FALSE;
+    };
+    auto free_attribute_list = [&]() -> bool {
+        if (!attribute_list) return true;
+        if (attribute_list_initialized) DeleteProcThreadAttributeList(attribute_list);
+        BOOL freed = HeapFree(GetProcessHeap(), 0, attribute_list);
+        attribute_list = NULL;
+        attribute_list_initialized = false;
+        return freed != FALSE;
+    };
+
+    STARTUPINFOEXW si{};
+    si.StartupInfo.cb = sizeof(STARTUPINFOW);
     PROCESS_INFORMATION pi = { 0 };
+
+    if (config->bootstrap_channel != REMEDY_INVALID_CHANNEL_TOKEN) {
+        remedy_err_t endpoint_error = channel_win32_issue_worker_endpoint(
+            config->bootstrap_channel,
+            &bootstrap_endpoint);
+        if (endpoint_error != REMEDY_OK) return endpoint_error;
+
+        if (!SetHandleInformation(
+                bootstrap_endpoint,
+                HANDLE_FLAG_INHERIT,
+                HANDLE_FLAG_INHERIT)) {
+            if (!close_bootstrap_endpoint()) return REMEDY_ERR_CONTAINMENT_FAILED;
+            return REMEDY_ERR_CONTAINMENT_FAILED;
+        }
+
+        BOOL size_probe = InitializeProcThreadAttributeList(NULL, 1, 0, &attribute_list_size);
+        DWORD size_probe_error = size_probe ? ERROR_SUCCESS : GetLastError();
+        if (size_probe || attribute_list_size == 0 || size_probe_error != ERROR_INSUFFICIENT_BUFFER) {
+            if (!close_bootstrap_endpoint()) return REMEDY_ERR_CONTAINMENT_FAILED;
+            return REMEDY_ERR_CONTAINMENT_FAILED;
+        }
+
+        attribute_list = static_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(
+            HeapAlloc(GetProcessHeap(), 0, attribute_list_size));
+        if (!attribute_list) {
+            if (!close_bootstrap_endpoint()) return REMEDY_ERR_CONTAINMENT_FAILED;
+            return REMEDY_ERR_OUT_OF_MEMORY;
+        }
+
+        if (!InitializeProcThreadAttributeList(attribute_list, 1, 0, &attribute_list_size)) {
+            bool freed = free_attribute_list();
+            bool closed = close_bootstrap_endpoint();
+            if (!freed || !closed) return REMEDY_ERR_CONTAINMENT_FAILED;
+            return REMEDY_ERR_CONTAINMENT_FAILED;
+        }
+        attribute_list_initialized = true;
+
+        if (!UpdateProcThreadAttribute(
+                attribute_list,
+                0,
+                PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
+                &bootstrap_endpoint,
+                sizeof(bootstrap_endpoint),
+                NULL,
+                NULL)) {
+            bool freed = free_attribute_list();
+            bool closed = close_bootstrap_endpoint();
+            if (!freed || !closed) return REMEDY_ERR_CONTAINMENT_FAILED;
+            return REMEDY_ERR_CONTAINMENT_FAILED;
+        }
+
+        wchar_t locator[32]{};
+        if (_snwprintf_s(
+                locator,
+                _countof(locator),
+                _TRUNCATE,
+                L"%llu",
+                static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(bootstrap_endpoint))) < 0) {
+            bool freed = free_attribute_list();
+            bool closed = close_bootstrap_endpoint();
+            if (!freed || !closed) return REMEDY_ERR_CONTAINMENT_FAILED;
+            return REMEDY_ERR_CONTAINMENT_FAILED;
+        }
+
+        wCommandLine.append(L"\"");
+        wCommandLine.append(wExecPath);
+        wCommandLine.append(L"\" --remedy-channel-handle=");
+        wCommandLine.append(locator);
+        pCommandLine = wCommandLine.data();
+        si.lpAttributeList = attribute_list;
+        si.StartupInfo.cb = sizeof(STARTUPINFOEXW);
+        inherit_bootstrap = true;
+    }
 
     BOOL procSuccess = CreateProcessW(
         wExecPath.c_str(),
-        NULL,
-        NULL, NULL, FALSE,
-        CREATE_SUSPENDED,
-        NULL, pWorkDir, &si, &pi
+        pCommandLine,
+        NULL, NULL, inherit_bootstrap ? TRUE : FALSE,
+        CREATE_SUSPENDED | (inherit_bootstrap ? EXTENDED_STARTUPINFO_PRESENT : 0),
+        NULL, pWorkDir, &si.StartupInfo, &pi
     );
+
+    bool attributes_freed = free_attribute_list();
+
+    if (bootstrap_endpoint != INVALID_HANDLE_VALUE) {
+#ifdef REMEDY_TEST_INHERITED_CHANNEL_SEAM
+        if (procSuccess) {
+            g_test_last_bootstrap_locator = reinterpret_cast<uintptr_t>(bootstrap_endpoint);
+        }
+#endif
+        if (!close_bootstrap_endpoint()) {
+            HANDLE no_job = NULL;
+            if (procSuccess) {
+                do_verified_failure_cleanup(pi.hProcess, pi.hThread, no_job, false);
+            }
+            return REMEDY_ERR_CONTAINMENT_FAILED;
+        }
+    }
+
+    if (!attributes_freed) {
+        HANDLE no_job = NULL;
+        if (procSuccess) do_verified_failure_cleanup(pi.hProcess, pi.hThread, no_job, false);
+        return REMEDY_ERR_CONTAINMENT_FAILED;
+    }
 
     if (!procSuccess) return REMEDY_ERR_IPC_FAILURE;
 

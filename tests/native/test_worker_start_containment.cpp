@@ -61,14 +61,14 @@ int main(int argc, char* argv[]) {
         assert(token == REMEDY_INVALID_WORKER_TOKEN);
     }
 
-    // 4. Unsupported channel nonce rejected
+    // 4. Unknown bootstrap channel rejected
     {
         remedy_worker_token_t token = 0x123;
         remedy_worker_config_t config = {0};
         config.executable_path = fixture_exe;
-        config.channel_nonce = "nonce_abc";
+        config.bootstrap_channel = 0x123456789ULL;
         remedy_err_t err = worker_port_start(&config, &token);
-        assert(err == REMEDY_ERR_NOT_SUPPORTED);
+        assert(err == REMEDY_ERR_INVALID_ARGUMENT);
         assert(token == REMEDY_INVALID_WORKER_TOKEN);
     }
 

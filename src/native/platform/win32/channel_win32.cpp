@@ -28,6 +28,7 @@
 #include <new>
 
 #include "remedy/ports/channel_port.h"
+#include "channel_worker_win32.h"
 #include "remedy/wire_frame.h"
 
 enum class channel_entry_state : uint32_t { CONSTRUCTING = 1, LIVE = 2, CLOSING = 3, RETIRED = 4 };
@@ -184,7 +185,9 @@ struct win32_channel_entry {
     std::condition_variable cv;
 
     HANDLE pipe_handle{INVALID_HANDLE_VALUE};
+    std::wstring pipe_path;
     bool   is_server{false};
+    bool   worker_endpoint_issued{false};
     channel_entry_state state{channel_entry_state::CONSTRUCTING};
     uint32_t active_leases{0};
     uint32_t close_pins{0};
@@ -391,6 +394,12 @@ remedy_err_t channel_port_create(const remedy_channel_config_t* config, remedy_c
     if (!entry) return REMEDY_ERR_OUT_OF_MEMORY;
     entry->is_server = config->is_server;
     entry->state = channel_entry_state::CONSTRUCTING;
+    try {
+        entry->pipe_path.assign(wPath);
+    } catch (const std::bad_alloc&) {
+        delete entry;
+        return REMEDY_ERR_OUT_OF_MEMORY;
+    }
 
     remedy_channel_token_t token = REMEDY_INVALID_CHANNEL_TOKEN;
     {
@@ -452,6 +461,46 @@ remedy_err_t channel_port_create(const remedy_channel_config_t* config, remedy_c
 }
 
 } // extern "C"
+
+remedy_err_t channel_win32_issue_worker_endpoint(
+    remedy_channel_token_t token,
+    HANDLE* out_worker_endpoint) {
+    if (!out_worker_endpoint) return REMEDY_ERR_INVALID_ARGUMENT;
+    *out_worker_endpoint = INVALID_HANDLE_VALUE;
+
+    win32_channel_entry* entry = nullptr;
+    channel_lease_guard lease;
+    remedy_err_t lease_error = channel_acquire_live_lease(token, &entry, &lease);
+    if (lease_error != REMEDY_OK) return lease_error;
+
+    std::lock_guard<std::mutex> lock(entry->entry_mutex);
+    if (!entry->is_server || entry->pipe_handle == INVALID_HANDLE_VALUE) {
+        return REMEDY_ERR_INVALID_ARGUMENT;
+    }
+    if (entry->worker_endpoint_issued) {
+        return REMEDY_ERR_REVOKING;
+    }
+
+    SECURITY_ATTRIBUTES security{};
+    security.nLength = sizeof(security);
+    security.bInheritHandle = TRUE;
+
+    HANDLE endpoint = CreateFileW(
+        entry->pipe_path.c_str(),
+        GENERIC_READ | GENERIC_WRITE,
+        0,
+        &security,
+        OPEN_EXISTING,
+        0,
+        NULL);
+    if (endpoint == INVALID_HANDLE_VALUE) {
+        return REMEDY_ERR_IPC_FAILURE;
+    }
+
+    entry->worker_endpoint_issued = true;
+    *out_worker_endpoint = endpoint;
+    return REMEDY_OK;
+}
 
 static remedy_err_t channel_operation_setup(
     win32_channel_entry* entry, remedy_channel_token_t token, channel_operation_kind kind, size_t buffer_size, channel_operation_record** out_record
