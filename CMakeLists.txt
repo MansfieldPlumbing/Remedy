@@ -99,6 +99,11 @@ add_executable(remedy_inherited_channel_worker
 )
 target_link_libraries(remedy_inherited_channel_worker PRIVATE remedy_headers)
 
+add_executable(remedy_opaque_worker
+    src/host/win32/remedy_opaque_worker.cpp
+)
+target_link_libraries(remedy_opaque_worker PRIVATE remedy_headers)
+
 add_executable(test_inherited_worker_channel
     tests/native/test_inherited_worker_channel.cpp
     src/native/platform/win32/worker_win32.cpp
@@ -133,6 +138,11 @@ add_executable(remedy_inherited_channel_worker
     src/host/android/remedy_inherited_channel_worker.cpp
 )
 target_link_libraries(remedy_inherited_channel_worker PRIVATE remedy_headers)
+
+add_executable(remedy_opaque_worker
+    src/host/android/remedy_opaque_worker.cpp
+)
+target_link_libraries(remedy_opaque_worker PRIVATE remedy_headers)
 
 add_executable(test_inherited_worker_channel_android
     tests/native/test_inherited_worker_channel_android.cpp
