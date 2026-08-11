@@ -118,6 +118,13 @@ target_compile_definitions(test_inherited_worker_channel PRIVATE REMEDY_TEST_INH
 add_test(NAME test_inherited_worker_channel COMMAND test_inherited_worker_channel $<TARGET_FILE:remedy_inherited_channel_worker>)
 set_tests_properties(test_inherited_worker_channel PROPERTIES TIMEOUT 300)
 
+add_executable(test_opaque_worker_lifecycle
+    tests/native/test_opaque_worker_lifecycle.cpp
+)
+target_link_libraries(test_opaque_worker_lifecycle PRIVATE remedy_headers remedy_worker_lifecycle)
+add_test(NAME test_opaque_worker_lifecycle COMMAND test_opaque_worker_lifecycle $<TARGET_FILE:remedy_opaque_worker>)
+set_tests_properties(test_opaque_worker_lifecycle PROPERTIES TIMEOUT 30)
+
 add_executable(test_channel_lifetime
     tests/native/test_channel_lifetime.cpp
     src/native/platform/win32/channel_win32.cpp
@@ -160,6 +167,11 @@ add_executable(test_inherited_worker_channel_android
 )
 target_link_libraries(test_inherited_worker_channel_android PRIVATE remedy_headers remedy_channel_android)
 target_compile_definitions(test_inherited_worker_channel_android PRIVATE REMEDY_TEST_INHERITED_CHANNEL_SEAM)
+
+add_executable(test_opaque_worker_lifecycle_android
+    tests/native/test_opaque_worker_lifecycle_android.cpp
+)
+target_link_libraries(test_opaque_worker_lifecycle_android PRIVATE remedy_headers remedy_worker_lifecycle)
 
 endif()
 

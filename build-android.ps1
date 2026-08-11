@@ -37,4 +37,14 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 & $adb @adbArgs push (Join-Path $buildDir "test_inherited_worker_channel_android") "$remoteRoot/receipt"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 & $adb @adbArgs shell "chmod 700 $remoteRoot/worker $remoteRoot/receipt && $remoteRoot/receipt $remoteRoot/worker"
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+$receiptBRoot = "/data/local/tmp/remedy-receipt-b-m1"
+& $adb @adbArgs shell "mkdir -p $receiptBRoot"
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+& $adb @adbArgs push (Join-Path $buildDir "remedy_opaque_worker") "$receiptBRoot/worker"
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+& $adb @adbArgs push (Join-Path $buildDir "test_opaque_worker_lifecycle_android") "$receiptBRoot/receipt"
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+& $adb @adbArgs shell "chmod 700 $receiptBRoot/worker $receiptBRoot/receipt && $receiptBRoot/receipt $receiptBRoot/worker"
 exit $LASTEXITCODE
