@@ -62,6 +62,11 @@ add_library(remedy_worker_win32 STATIC
 )
 target_link_libraries(remedy_worker_win32 PRIVATE remedy_headers remedy_channel_win32)
 
+add_library(remedy_worker_lifecycle STATIC
+    src/native/core/worker_lifecycle.cpp
+)
+target_link_libraries(remedy_worker_lifecycle PRIVATE remedy_headers remedy_worker_win32 remedy_channel_win32)
+
 add_executable(remedy_worker_fixture
     src/host/win32/remedy_worker_fixture.cpp
 )
@@ -133,6 +138,11 @@ add_library(remedy_worker_android STATIC
     src/native/platform/android/worker_android.cpp
 )
 target_link_libraries(remedy_worker_android PRIVATE remedy_headers remedy_channel_android)
+
+add_library(remedy_worker_lifecycle STATIC
+    src/native/core/worker_lifecycle.cpp
+)
+target_link_libraries(remedy_worker_lifecycle PRIVATE remedy_headers remedy_worker_android remedy_channel_android)
 
 add_executable(remedy_inherited_channel_worker
     src/host/android/remedy_inherited_channel_worker.cpp
