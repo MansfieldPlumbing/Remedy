@@ -6,7 +6,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include <assert.h>
+#include "remedy/receipt_check.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string>
@@ -27,13 +27,13 @@ struct generation {
 
 static size_t open_descriptor_count() {
     DIR* directory = opendir("/proc/self/fd");
-    assert(directory != nullptr);
+    REMEDY_RECEIPT_CHECK(directory != nullptr);
     size_t count = 0;
     for (;;) {
         errno = 0;
         dirent* item = readdir(directory);
         if (!item) {
-            assert(errno == 0);
+            REMEDY_RECEIPT_CHECK(errno == 0);
             break;
         }
         if (item->d_name[0] == '.' &&
@@ -42,7 +42,7 @@ static size_t open_descriptor_count() {
         }
         ++count;
     }
-    assert(closedir(directory) == 0);
+    REMEDY_RECEIPT_CHECK(closedir(directory) == 0);
     return count;
 }
 
@@ -50,21 +50,21 @@ static generation start_generation(const char* fixture, uint64_t sequence) {
     generation result{};
     std::string name = "receipt_a_" + std::to_string(getpid()) + "_" + std::to_string(sequence);
     remedy_channel_config_t channel_config{name.c_str(), true};
-    assert(channel_port_create(&channel_config, &result.channel) == REMEDY_OK);
+    REMEDY_RECEIPT_CHECK(channel_port_create(&channel_config, &result.channel) == REMEDY_OK);
     remedy_worker_config_t worker_config{};
     worker_config.executable_path = fixture;
     worker_config.bootstrap_channel = result.channel;
-    assert(worker_port_start(&worker_config, &result.worker) == REMEDY_OK);
+    REMEDY_RECEIPT_CHECK(worker_port_start(&worker_config, &result.worker) == REMEDY_OK);
     result.source_descriptor = remedy_test_get_last_bootstrap_descriptor();
-    assert(result.source_descriptor >= 0);
+    REMEDY_RECEIPT_CHECK(result.source_descriptor >= 0);
     remedy_worker_token_t duplicate = 99;
-    assert(worker_port_start(&worker_config, &duplicate) == REMEDY_ERR_REVOKING);
-    assert(duplicate == REMEDY_INVALID_WORKER_TOKEN);
+    REMEDY_RECEIPT_CHECK(worker_port_start(&worker_config, &duplicate) == REMEDY_ERR_REVOKING);
+    REMEDY_RECEIPT_CHECK(duplicate == REMEDY_INVALID_WORKER_TOKEN);
     return result;
 }
 
 static void connect_generation(const generation& value) {
-    assert(channel_port_connect(value.channel, 2000) == REMEDY_OK);
+    REMEDY_RECEIPT_CHECK(channel_port_connect(value.channel, 2000) == REMEDY_OK);
 }
 
 static void exchange_ping(const generation& value, uint64_t request_id, uint64_t domain_handle) {
@@ -72,70 +72,70 @@ static void exchange_ping(const generation& value, uint64_t request_id, uint64_t
     ping.kind = REMEDY_WIRE_KIND_PING;
     ping.request_id = request_id;
     ping.domain_handle = domain_handle;
-    assert(channel_port_send_frame(value.channel, &ping, nullptr) == REMEDY_OK);
+    REMEDY_RECEIPT_CHECK(channel_port_send_frame(value.channel, &ping, nullptr) == REMEDY_OK);
     remedy_wire_frame_header_t pong{};
-    assert(channel_port_read_frame(value.channel, &pong, nullptr, 0) == REMEDY_OK);
-    assert(pong.kind == REMEDY_WIRE_KIND_PONG);
-    assert(pong.request_id == request_id);
-    assert(pong.domain_handle == domain_handle);
+    REMEDY_RECEIPT_CHECK(channel_port_read_frame(value.channel, &pong, nullptr, 0) == REMEDY_OK);
+    REMEDY_RECEIPT_CHECK(pong.kind == REMEDY_WIRE_KIND_PONG);
+    REMEDY_RECEIPT_CHECK(pong.request_id == request_id);
+    REMEDY_RECEIPT_CHECK(pong.domain_handle == domain_handle);
 }
 
 static void release_generation(const generation& value, uint64_t request_id) {
     remedy_wire_frame_header_t release{};
     release.kind = REMEDY_WIRE_KIND_QUIESCE;
     release.request_id = request_id;
-    assert(channel_port_send_frame(value.channel, &release, nullptr) == REMEDY_OK);
+    REMEDY_RECEIPT_CHECK(channel_port_send_frame(value.channel, &release, nullptr) == REMEDY_OK);
 }
 
 static void retire_generation(const generation& value, bool natural_death) {
     bool dead = false;
     if (natural_death) {
-        assert(worker_port_wait_for_death(value.worker, 2000, &dead) == REMEDY_OK);
-        assert(dead);
+        REMEDY_RECEIPT_CHECK(worker_port_wait_for_death(value.worker, 2000, &dead) == REMEDY_OK);
+        REMEDY_RECEIPT_CHECK(dead);
     }
-    assert(worker_port_terminate(value.worker) == REMEDY_OK);
-    assert(worker_port_wait_for_death(value.worker, 2000, &dead) == REMEDY_OK);
-    assert(dead);
-    assert(worker_port_destroy(value.worker) == REMEDY_OK);
-    assert(worker_port_destroy(value.worker) == REMEDY_ERR_INVALID_ARGUMENT);
-    assert(channel_port_close(value.channel) == REMEDY_OK);
-    assert(channel_port_destroy(value.channel) == REMEDY_OK);
-    assert(channel_port_connect(value.channel, 1) == REMEDY_ERR_INVALID_ARGUMENT);
+    REMEDY_RECEIPT_CHECK(worker_port_terminate(value.worker) == REMEDY_OK);
+    REMEDY_RECEIPT_CHECK(worker_port_wait_for_death(value.worker, 2000, &dead) == REMEDY_OK);
+    REMEDY_RECEIPT_CHECK(dead);
+    REMEDY_RECEIPT_CHECK(worker_port_destroy(value.worker) == REMEDY_OK);
+    REMEDY_RECEIPT_CHECK(worker_port_destroy(value.worker) == REMEDY_ERR_INVALID_ARGUMENT);
+    REMEDY_RECEIPT_CHECK(channel_port_close(value.channel) == REMEDY_OK);
+    REMEDY_RECEIPT_CHECK(channel_port_destroy(value.channel) == REMEDY_OK);
+    REMEDY_RECEIPT_CHECK(channel_port_connect(value.channel, 1) == REMEDY_ERR_INVALID_ARGUMENT);
 }
 
 static void prove_descriptor_number_is_not_authority(const char* fixture) {
     posix_spawnattr_t attributes{};
-    assert(posix_spawnattr_init(&attributes) == 0);
-    assert(posix_spawnattr_setflags(&attributes, POSIX_SPAWN_CLOEXEC_DEFAULT) == 0);
+    REMEDY_RECEIPT_CHECK(posix_spawnattr_init(&attributes) == 0);
+    REMEDY_RECEIPT_CHECK(posix_spawnattr_setflags(&attributes, POSIX_SPAWN_CLOEXEC_DEFAULT) == 0);
     char* const argv[] = {const_cast<char*>(fixture), nullptr};
     pid_t pid = -1;
-    assert(posix_spawn(&pid, fixture, nullptr, &attributes, argv, environ) == 0);
-    assert(posix_spawnattr_destroy(&attributes) == 0);
+    REMEDY_RECEIPT_CHECK(posix_spawn(&pid, fixture, nullptr, &attributes, argv, environ) == 0);
+    REMEDY_RECEIPT_CHECK(posix_spawnattr_destroy(&attributes) == 0);
     int status = 0;
-    assert(waitpid(pid, &status, 0) == pid);
-    assert(WIFEXITED(status));
-    assert(WEXITSTATUS(status) == 3);
+    REMEDY_RECEIPT_CHECK(waitpid(pid, &status, 0) == pid);
+    REMEDY_RECEIPT_CHECK(WIFEXITED(status));
+    REMEDY_RECEIPT_CHECK(WEXITSTATUS(status) == 3);
 }
 
 static std::vector<int> create_canaries() {
     std::vector<int> result;
     for (size_t i = 0; i < 8; ++i) {
         int fd = eventfd(0, 0);
-        assert(fd >= 0);
+        REMEDY_RECEIPT_CHECK(fd >= 0);
         int flags = fcntl(fd, F_GETFD);
-        assert(flags >= 0);
-        assert(fcntl(fd, F_SETFD, flags & ~FD_CLOEXEC) == 0);
+        REMEDY_RECEIPT_CHECK(flags >= 0);
+        REMEDY_RECEIPT_CHECK(fcntl(fd, F_SETFD, flags & ~FD_CLOEXEC) == 0);
         result.push_back(fd);
     }
     return result;
 }
 
 static void close_canaries(const std::vector<int>& canaries) {
-    for (int fd : canaries) assert(close(fd) == 0);
+    for (int fd : canaries) REMEDY_RECEIPT_CHECK(close(fd) == 0);
 }
 
 int main(int argc, char** argv) {
-    assert(argc == 2);
+    REMEDY_RECEIPT_CHECK(argc == 2);
     const char* fixture = argv[1];
     prove_descriptor_number_is_not_authority(fixture);
     const size_t baseline_descriptors = open_descriptor_count();
@@ -146,24 +146,24 @@ int main(int argc, char** argv) {
         std::string name = "receipt_a_failed_launch";
         remedy_channel_config_t channel_config{name.c_str(), true};
         remedy_channel_token_t channel = REMEDY_INVALID_CHANNEL_TOKEN;
-        assert(channel_port_create(&channel_config, &channel) == REMEDY_OK);
+        REMEDY_RECEIPT_CHECK(channel_port_create(&channel_config, &channel) == REMEDY_OK);
         remedy_worker_config_t failed_config{};
         failed_config.executable_path = "/data/local/tmp/remedy-does-not-exist";
         failed_config.bootstrap_channel = channel;
         remedy_worker_token_t worker = 99;
-        assert(worker_port_start(&failed_config, &worker) == REMEDY_ERR_IPC_FAILURE);
-        assert(worker == REMEDY_INVALID_WORKER_TOKEN);
-        assert(channel_port_close(channel) == REMEDY_OK);
-        assert(channel_port_destroy(channel) == REMEDY_OK);
-        assert(open_descriptor_count() == baseline_descriptors);
+        REMEDY_RECEIPT_CHECK(worker_port_start(&failed_config, &worker) == REMEDY_ERR_IPC_FAILURE);
+        REMEDY_RECEIPT_CHECK(worker == REMEDY_INVALID_WORKER_TOKEN);
+        REMEDY_RECEIPT_CHECK(channel_port_close(channel) == REMEDY_OK);
+        REMEDY_RECEIPT_CHECK(channel_port_destroy(channel) == REMEDY_OK);
+        REMEDY_RECEIPT_CHECK(open_descriptor_count() == baseline_descriptors);
     }
 
     remedy_worker_config_t arguments_config{};
     arguments_config.executable_path = fixture;
     arguments_config.arguments = "--ambient-authority";
     remedy_worker_token_t arguments_worker = 99;
-    assert(worker_port_start(&arguments_config, &arguments_worker) == REMEDY_ERR_NOT_SUPPORTED);
-    assert(arguments_worker == REMEDY_INVALID_WORKER_TOKEN);
+    REMEDY_RECEIPT_CHECK(worker_port_start(&arguments_config, &arguments_worker) == REMEDY_ERR_NOT_SUPPORTED);
+    REMEDY_RECEIPT_CHECK(arguments_worker == REMEDY_INVALID_WORKER_TOKEN);
 
     std::vector<int> canaries = create_canaries();
     generation canary = start_generation(fixture, sequence++);
@@ -199,9 +199,9 @@ int main(int argc, char** argv) {
         stale_channels.push_back(value.channel);
         retire_generation(value, true);
     }
-    assert(descriptor_reused);
-    for (auto token : stale_workers) assert(worker_port_destroy(token) == REMEDY_ERR_INVALID_ARGUMENT);
-    for (auto token : stale_channels) assert(channel_port_connect(token, 1) == REMEDY_ERR_INVALID_ARGUMENT);
+    REMEDY_RECEIPT_CHECK(descriptor_reused);
+    for (auto token : stale_workers) REMEDY_RECEIPT_CHECK(worker_port_destroy(token) == REMEDY_ERR_INVALID_ARGUMENT);
+    for (auto token : stale_channels) REMEDY_RECEIPT_CHECK(channel_port_connect(token, 1) == REMEDY_ERR_INVALID_ARGUMENT);
 
     static constexpr size_t stress_iterations = 2048;
     for (size_t i = 0; i < stress_iterations; ++i) {
@@ -219,7 +219,7 @@ int main(int argc, char** argv) {
                 remedy_wire_frame_header_t ping{};
                 ping.kind = REMEDY_WIRE_KIND_PING;
                 ping.request_id = sequence;
-                assert(channel_port_send_frame(value.channel, &ping, nullptr) == REMEDY_OK);
+                REMEDY_RECEIPT_CHECK(channel_port_send_frame(value.channel, &ping, nullptr) == REMEDY_OK);
                 retire_generation(value, false);
                 break;
             }
@@ -232,7 +232,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    assert(open_descriptor_count() == baseline_descriptors);
+    REMEDY_RECEIPT_CHECK(open_descriptor_count() == baseline_descriptors);
 
     printf("Android Receipt A passed: fixed fd 3, canary isolation, descriptor reuse, crossed wires, and %zu lifecycles.\n",
            stress_iterations);

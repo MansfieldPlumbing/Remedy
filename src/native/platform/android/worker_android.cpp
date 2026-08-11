@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <spawn.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -72,6 +73,15 @@ extern "C" remedy_err_t worker_port_start(
 #ifdef REMEDY_TEST_INHERITED_CHANNEL_SEAM
     g_test_last_bootstrap_descriptor = endpoint;
 #endif
+
+    struct stat executable_status{};
+    if (stat(config->executable_path, &executable_status) != 0 ||
+        !S_ISREG(executable_status.st_mode) ||
+        access(config->executable_path, X_OK) != 0) {
+        return close(endpoint) == 0
+            ? REMEDY_ERR_IPC_FAILURE
+            : REMEDY_ERR_CONTAINMENT_FAILED;
+    }
 
     posix_spawnattr_t attributes{};
     posix_spawn_file_actions_t actions{};
