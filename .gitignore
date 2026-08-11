@@ -1,5 +1,6 @@
 # Native build outputs
 /build/
+/build-android-arm64/
 /out/
 /cmake-build-*/
 CMakeFiles/

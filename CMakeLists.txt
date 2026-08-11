@@ -24,6 +24,7 @@ target_include_directories(remedy_headers INTERFACE
 )
 
 # Active Compiled Targets
+if(WIN32)
 add_executable(remedy_echo_worker
     src/host/win32/remedy_echo_worker.cpp
 )
@@ -115,6 +116,32 @@ target_link_libraries(test_channel_lifetime PRIVATE remedy_headers)
 target_compile_definitions(test_channel_lifetime PRIVATE REMEDY_TEST_CHANNEL_LIFETIME_SEAM)
 add_test(NAME test_channel_lifetime COMMAND test_channel_lifetime)
 set_tests_properties(test_channel_lifetime PROPERTIES TIMEOUT 480)
+
+elseif(ANDROID)
+
+add_library(remedy_channel_android STATIC
+    src/native/platform/android/channel_android.cpp
+)
+target_link_libraries(remedy_channel_android PRIVATE remedy_headers)
+
+add_library(remedy_worker_android STATIC
+    src/native/platform/android/worker_android.cpp
+)
+target_link_libraries(remedy_worker_android PRIVATE remedy_headers remedy_channel_android)
+
+add_executable(remedy_inherited_channel_worker
+    src/host/android/remedy_inherited_channel_worker.cpp
+)
+target_link_libraries(remedy_inherited_channel_worker PRIVATE remedy_headers)
+
+add_executable(test_inherited_worker_channel_android
+    tests/native/test_inherited_worker_channel_android.cpp
+    src/native/platform/android/worker_android.cpp
+)
+target_link_libraries(test_inherited_worker_channel_android PRIVATE remedy_headers remedy_channel_android)
+target_compile_definitions(test_inherited_worker_channel_android PRIVATE REMEDY_TEST_INHERITED_CHANNEL_SEAM)
+
+endif()
 
 # Explicitly Deferred Recovered Sources (Require semantic repair or missing implementations):
 # - tests/native/test_collapse.cpp (missing domain.h header)
