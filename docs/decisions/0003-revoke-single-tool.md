@@ -1,10 +1,10 @@
-# ADR 0003: Single MCP Tool Interface (`Remedy-ServiceRequest`)
+# ADR 0003: Single MCP Tool Interface (`Revoke-ServiceRequest`)
 
 ## Context
 Multi-tool MCP schemas lead to tool proliferation, brittle schema synchronization, and agents attempting uncoordinated multi-step execution.
 
 ## Decision
-Remedy exposes exactly one MCP tool: **`Remedy-ServiceRequest`**.
+Revoke exposes exactly one MCP tool: **`Revoke-ServiceRequest`**.
 
 ### Input Schema
 ```json

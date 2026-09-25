@@ -44,58 +44,58 @@ static void blocking_deleter(void* ptr) noexcept {
 int main() {
     std::cout << "[TEST] Starting Deterministic Object Table Synchronization Test..." << std::endl;
 
-    remedy::object_table table;
+    revoke::object_table table;
 
     // Part 1: Lease Hold, Timeout, Acquisition Rejection, Probe Slot Protection, and Retirement Retry Test
     std::atomic<uint32_t> r1_destroyed{0};
     auto* r1 = new sync_resource{42, &r1_destroyed};
-    remedy_handle_t h1 = table.insert(REMEDY_OBJECT_WORKER, REMEDY_INVALID_HANDLE, r1, sync_deleter);
-    assert(h1 != REMEDY_INVALID_HANDLE);
-    uint32_t slot1 = remedy_handle_slot(h1);
-    uint32_t gen1 = remedy_handle_generation(h1);
+    revoke_handle_t h1 = table.insert(REVOKE_OBJECT_WORKER, REVOKE_INVALID_HANDLE, r1, sync_deleter);
+    assert(h1 != REVOKE_INVALID_HANDLE);
+    uint32_t slot1 = revoke_handle_slot(h1);
+    uint32_t gen1 = revoke_handle_generation(h1);
 
     // 1. Hold a valid lease
-    remedy_err_t acq_err = REMEDY_OK;
-    auto lease1 = table.acquire<sync_resource>(h1, REMEDY_OBJECT_WORKER, &acq_err);
-    assert(acq_err == REMEDY_OK);
+    revoke_err_t acq_err = REVOKE_OK;
+    auto lease1 = table.acquire<sync_resource>(h1, REVOKE_OBJECT_WORKER, &acq_err);
+    assert(acq_err == REVOKE_OK);
     assert(static_cast<bool>(lease1));
 
     // 2. Call remove(h1, 0) to establish REVOKING without sleep
-    remedy_err_t timeout_err = table.remove(h1, 0);
+    revoke_err_t timeout_err = table.remove(h1, 0);
 
-    // 3. Assert REMEDY_ERR_TIMEOUT
-    assert(timeout_err == REMEDY_ERR_TIMEOUT);
+    // 3. Assert REVOKE_ERR_TIMEOUT
+    assert(timeout_err == REVOKE_ERR_TIMEOUT);
 
     // 4. Assert deleter has not run
     assert(r1_destroyed.load() == 0);
 
     // 5. Assert generation has not advanced (h1 is invalid to callers because state is REVOKING)
-    assert(!table.is_valid(h1, REMEDY_OBJECT_WORKER));
+    assert(!table.is_valid(h1, REVOKE_OBJECT_WORKER));
 
-    // 6. Assert new acquisition returns REMEDY_ERR_REVOKING
+    // 6. Assert new acquisition returns REVOKE_ERR_REVOKING
     {
-        remedy_err_t err_rev = REMEDY_OK;
-        auto lease_rev = table.acquire<sync_resource>(h1, REMEDY_OBJECT_WORKER, &err_rev);
-        assert(err_rev == REMEDY_ERR_REVOKING);
+        revoke_err_t err_rev = REVOKE_OK;
+        auto lease_rev = table.acquire<sync_resource>(h1, REVOKE_OBJECT_WORKER, &err_rev);
+        assert(err_rev == REVOKE_ERR_REVOKING);
         assert(!static_cast<bool>(lease_rev));
     }
 
     // PROBE INSERTION ASSERTION: Prove timeout does not publish or reuse the slot while lease remains held
     std::atomic<uint32_t> probe_destroyed{0};
     auto* probe_res = new sync_resource{999, &probe_destroyed};
-    remedy_handle_t probe_handle = table.insert(REMEDY_OBJECT_WORKER, REMEDY_INVALID_HANDLE, probe_res, sync_deleter);
+    revoke_handle_t probe_handle = table.insert(REVOKE_OBJECT_WORKER, REVOKE_INVALID_HANDLE, probe_res, sync_deleter);
 
-    assert(probe_handle != REMEDY_INVALID_HANDLE);
-    assert(remedy_handle_slot(probe_handle) != remedy_handle_slot(h1));
-    assert(table.remove(probe_handle) == REMEDY_OK);
+    assert(probe_handle != REVOKE_INVALID_HANDLE);
+    assert(revoke_handle_slot(probe_handle) != revoke_handle_slot(h1));
+    assert(table.remove(probe_handle) == REVOKE_OK);
     assert(probe_destroyed.load() == 1);
 
     // 7. Release lease
     lease1.reset();
 
-    // 8. Retry remove(h1, 2000) and assert REMEDY_OK
-    remedy_err_t retry_err = table.remove(h1, 2000);
-    assert(retry_err == REMEDY_OK);
+    // 8. Retry remove(h1, 2000) and assert REVOKE_OK
+    revoke_err_t retry_err = table.remove(h1, 2000);
+    assert(retry_err == REVOKE_OK);
 
     // 9. Assert deleter runs exactly once
     assert(r1_destroyed.load() == 1);
@@ -110,10 +110,10 @@ int main() {
         std::future<void> entered_future = ctx.entered_promise.get_future();
 
         auto* b_res = new blocking_resource{&ctx};
-        remedy_handle_t bh = table.insert(REMEDY_OBJECT_WORKER, REMEDY_INVALID_HANDLE, b_res, blocking_deleter);
-        assert(bh != REMEDY_INVALID_HANDLE);
+        revoke_handle_t bh = table.insert(REVOKE_OBJECT_WORKER, REVOKE_INVALID_HANDLE, b_res, blocking_deleter);
+        assert(bh != REVOKE_INVALID_HANDLE);
 
-        std::atomic<remedy_err_t> first_remove_result{REMEDY_ERR_TIMEOUT};
+        std::atomic<revoke_err_t> first_remove_result{REVOKE_ERR_TIMEOUT};
 
         // Thread 1 calls remove(bh), which claims finalizer ownership and enters blocking_deleter
         std::thread remover1([&]() {
@@ -124,16 +124,16 @@ int main() {
         assert(entered_future.wait_for(std::chrono::seconds(2)) == std::future_status::ready);
 
         // While Thread 1 is blocked inside deleter, Thread 2 calls remove(bh)
-        // Must return EXACTLY REMEDY_ERR_REVOKING (active finalizer exclusion)
-        remedy_err_t second_remove_result = table.remove(bh, 2000);
-        assert(second_remove_result == REMEDY_ERR_REVOKING);
+        // Must return EXACTLY REVOKE_ERR_REVOKING (active finalizer exclusion)
+        revoke_err_t second_remove_result = table.remove(bh, 2000);
+        assert(second_remove_result == REVOKE_ERR_REVOKING);
 
         // Unblock Thread 1 deleter
         release_promise.set_value();
 
         remover1.join();
 
-        assert(first_remove_result.load() == REMEDY_OK);
+        assert(first_remove_result.load() == REVOKE_OK);
         assert(ctx.destroy_count.load() == 1);
     }
 
@@ -142,40 +142,40 @@ int main() {
         // Setup: Retire slot S at generation G
         std::atomic<uint32_t> initial_destroyed{0};
         auto* init_res = new sync_resource{1, &initial_destroyed};
-        remedy_handle_t init_h = table.insert(REMEDY_OBJECT_WORKER, REMEDY_INVALID_HANDLE, init_res, sync_deleter);
+        revoke_handle_t init_h = table.insert(REVOKE_OBJECT_WORKER, REVOKE_INVALID_HANDLE, init_res, sync_deleter);
 
-        uint32_t slot_S = remedy_handle_slot(init_h);
-        uint32_t gen_G = remedy_handle_generation(init_h);
+        uint32_t slot_S = revoke_handle_slot(init_h);
+        uint32_t gen_G = revoke_handle_generation(init_h);
 
-        assert(table.remove(init_h) == REMEDY_OK);
+        assert(table.remove(init_h) == REVOKE_OK);
         assert(initial_destroyed.load() == 1);
 
         // 1. Insert Resource A -> assert A receives slot S at generation G + 1 (honoring wraparound rule)
         std::atomic<uint32_t> a_destroyed{0};
         auto* res_A = new sync_resource{10, &a_destroyed};
-        remedy_handle_t h_A = table.insert(REMEDY_OBJECT_WORKER, REMEDY_INVALID_HANDLE, res_A, sync_deleter);
+        revoke_handle_t h_A = table.insert(REVOKE_OBJECT_WORKER, REVOKE_INVALID_HANDLE, res_A, sync_deleter);
 
-        uint32_t slot_A = remedy_handle_slot(h_A);
-        uint32_t gen_A = remedy_handle_generation(h_A);
+        uint32_t slot_A = revoke_handle_slot(h_A);
+        uint32_t gen_A = revoke_handle_generation(h_A);
         uint32_t expected_gen_A = (gen_G + 1 == 0) ? 1 : (gen_G + 1);
 
         assert(slot_A == slot_S);
         assert(gen_A == expected_gen_A);
 
         // 2. Leave A live!
-        assert(table.is_valid(h_A, REMEDY_OBJECT_WORKER));
+        assert(table.is_valid(h_A, REVOKE_OBJECT_WORKER));
 
         // 3. Insert Resource B -> assert B receives a slot OTHER than S (proves S was published to free_list_ only once!)
         std::atomic<uint32_t> b_destroyed{0};
         auto* res_B = new sync_resource{20, &b_destroyed};
-        remedy_handle_t h_B = table.insert(REMEDY_OBJECT_WORKER, REMEDY_INVALID_HANDLE, res_B, sync_deleter);
+        revoke_handle_t h_B = table.insert(REVOKE_OBJECT_WORKER, REVOKE_INVALID_HANDLE, res_B, sync_deleter);
 
-        uint32_t slot_B = remedy_handle_slot(h_B);
+        uint32_t slot_B = revoke_handle_slot(h_B);
         assert(slot_B != slot_S);
 
         // Cleanup A and B
-        assert(table.remove(h_A) == REMEDY_OK);
-        assert(table.remove(h_B) == REMEDY_OK);
+        assert(table.remove(h_A) == REVOKE_OK);
+        assert(table.remove(h_B) == REVOKE_OK);
         assert(a_destroyed.load() == 1);
         assert(b_destroyed.load() == 1);
     }

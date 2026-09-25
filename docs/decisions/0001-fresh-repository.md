@@ -8,7 +8,7 @@ Existing projects in the ecosystem (`subsystem`, `terminal`, `agent-browser`, `T
 - Platform-dependent macros scattered throughout common code.
 
 ## Decision
-Remedy is created as a completely fresh repository with a clean Git history.
+Revoke is created as a completely fresh repository with a clean Git history.
 - Existing projects are designated as **donor repositories** and reference implementations.
 - No code will be copied wholesale.
 - Mechanisms are transplanted only when accompanied by characterization tests and pinned commit references.

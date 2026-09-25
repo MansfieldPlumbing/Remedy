@@ -1,6 +1,6 @@
 /src/native/core/ @MansfieldPlumbing
 /src/native/platform/ @MansfieldPlumbing
-/include/remedy/ @MansfieldPlumbing
+/include/revoke/ @MansfieldPlumbing
 /tests/ @MansfieldPlumbing
 /.github/workflows/ @MansfieldPlumbing
 /docs/invariants.md @MansfieldPlumbing

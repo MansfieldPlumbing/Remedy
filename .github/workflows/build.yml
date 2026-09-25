@@ -85,7 +85,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: remedy-canonical-build-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          name: revoke-canonical-build-failure-${{ github.run_id }}-${{ github.run_attempt }}
           if-no-files-found: ignore
           retention-days: 7
           path: |

@@ -1,6 +1,6 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
-#include "remedy/ports/worker_port.h"
+#include "revoke/ports/worker_port.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <chrono>
@@ -13,15 +13,15 @@
 
 namespace fs = std::filesystem;
 
-#ifdef REMEDY_TEST_WORKER_TREE_SEAM
+#ifdef REVOKE_TEST_WORKER_TREE_SEAM
 extern "C" {
-    bool remedy_test_worker_job_get_policy(
-        remedy_worker_token_t token,
+    bool revoke_test_worker_job_get_policy(
+        revoke_worker_token_t token,
         uint32_t* out_limit_flags,
         uint32_t* out_active_processes
     );
-    bool remedy_test_worker_job_contains_pid(
-        remedy_worker_token_t token,
+    bool revoke_test_worker_job_contains_pid(
+        revoke_worker_token_t token,
         uint32_t pid,
         bool* out_contains
     );
@@ -368,7 +368,7 @@ static bool parse_manifest_file(const fs::path& path, bool is_emergency, manifes
 }
 
 struct test_scenario_context {
-    remedy_worker_token_t token{REMEDY_INVALID_WORKER_TOKEN};
+    revoke_worker_token_t token{REVOKE_INVALID_WORKER_TOKEN};
     DWORD root_pid{0};
     DWORD child_pid{0};
     DWORD grandchild_pid{0};
@@ -442,13 +442,13 @@ struct test_scenario_context {
         }
 
         // 2. Initial Worker Job Termination Attempt (ONLY if token valid and job termination not yet succeeded)
-        if (token != REMEDY_INVALID_WORKER_TOKEN && !job_termination_succeeded) {
-            remedy_err_t term_err = worker_port_terminate(token);
-            if (term_err == REMEDY_OK) {
+        if (token != REVOKE_INVALID_WORKER_TOKEN && !job_termination_succeeded) {
+            revoke_err_t term_err = worker_port_terminate(token);
+            if (term_err == REVOKE_OK) {
                 job_termination_succeeded = true;
                 bool died = false;
-                remedy_err_t werr = worker_port_wait_for_death(token, 2000, &died);
-                if (werr == REMEDY_OK && died) {
+                revoke_err_t werr = worker_port_wait_for_death(token, 2000, &died);
+                if (werr == REVOKE_OK && died) {
                     root_death_verified = true;
                 } else {
                     record_cleanup_error("Initial worker_port_wait_for_death failed in cleanup");
@@ -525,10 +525,10 @@ struct test_scenario_context {
         }
 
         // 4. One Bounded Retry for Worker Termination if initial attempt failed and token valid
-        if (token != REMEDY_INVALID_WORKER_TOKEN) {
+        if (token != REVOKE_INVALID_WORKER_TOKEN) {
             if (!job_termination_succeeded) {
-                remedy_err_t retry_err = worker_port_terminate(token);
-                if (retry_err == REMEDY_OK) {
+                revoke_err_t retry_err = worker_port_terminate(token);
+                if (retry_err == REVOKE_OK) {
                     job_termination_succeeded = true;
                 } else {
                     record_cleanup_error("Retry worker_port_terminate returned " + std::to_string(retry_err));
@@ -536,8 +536,8 @@ struct test_scenario_context {
             }
             if (!root_death_verified) {
                 bool died = false;
-                remedy_err_t werr = worker_port_wait_for_death(token, 2000, &died);
-                if (werr == REMEDY_OK && died) {
+                revoke_err_t werr = worker_port_wait_for_death(token, 2000, &died);
+                if (werr == REVOKE_OK && died) {
                     root_death_verified = true;
                 } else {
                     record_cleanup_error("Post-emergency worker_port_wait_for_death failed");
@@ -546,11 +546,11 @@ struct test_scenario_context {
         }
 
         // 5. Destroy worker token ONLY when job termination succeeded and root death verified
-        if (token != REMEDY_INVALID_WORKER_TOKEN) {
+        if (token != REVOKE_INVALID_WORKER_TOKEN) {
             if (job_termination_succeeded && root_death_verified) {
-                remedy_err_t des_err = worker_port_destroy(token);
-                if (des_err == REMEDY_OK) {
-                    token = REMEDY_INVALID_WORKER_TOKEN;
+                revoke_err_t des_err = worker_port_destroy(token);
+                if (des_err == REVOKE_OK) {
+                    token = REVOKE_INVALID_WORKER_TOKEN;
                 } else {
                     record_cleanup_error("worker_port_destroy returned " + std::to_string(des_err));
                 }
@@ -591,7 +591,7 @@ static bool run_scenario_a(const char* fixture_exe, std::string& out_primary_err
     test_scenario_context ctx;
 
     fs::path test_dir = fs::temp_directory_path() / (
-        "remedy_test_tree_scen_a_p" + std::to_string(GetCurrentProcessId())
+        "revoke_test_tree_scen_a_p" + std::to_string(GetCurrentProcessId())
     );
     std::string cd_diag;
     if (!create_dir_clean_checked(test_dir, cd_diag)) {
@@ -602,7 +602,7 @@ static bool run_scenario_a(const char* fixture_exe, std::string& out_primary_err
     }
     std::string test_dir_str = test_dir.string();
 
-    fs::path mode_path = test_dir / "remedy_fixture_tree_mode.tmp";
+    fs::path mode_path = test_dir / "revoke_fixture_tree_mode.tmp";
     const char mode_content[] = "HOLD_ROOT";
     atomic_publish_result pub = atomic_publish_file(
         (test_dir / "mode.tmp").c_str(),
@@ -618,12 +618,12 @@ static bool run_scenario_a(const char* fixture_exe, std::string& out_primary_err
         return false;
     }
 
-    remedy_worker_config_t config = { 0 };
+    revoke_worker_config_t config = { 0 };
     config.executable_path = fixture_exe;
     config.working_directory = test_dir_str.c_str();
 
-    remedy_err_t start_err = worker_port_start(&config, &ctx.token);
-    if (start_err != REMEDY_OK || ctx.token == REMEDY_INVALID_WORKER_TOKEN) {
+    revoke_err_t start_err = worker_port_start(&config, &ctx.token);
+    if (start_err != REVOKE_OK || ctx.token == REVOKE_INVALID_WORKER_TOKEN) {
         ctx.record_error("worker_port_start failed: " + std::to_string(start_err));
         ctx.execute_cleanup(test_dir);
         out_primary_err = ctx.first_error;
@@ -631,8 +631,8 @@ static bool run_scenario_a(const char* fixture_exe, std::string& out_primary_err
         return false;
     }
 
-    fs::path normal_manifest = test_dir / "remedy_tree_manifest.ready";
-    fs::path emergency_manifest = test_dir / "remedy_breakaway_emergency.ready";
+    fs::path normal_manifest = test_dir / "revoke_tree_manifest.ready";
+    fs::path emergency_manifest = test_dir / "revoke_breakaway_emergency.ready";
 
     auto start_time = std::chrono::steady_clock::now();
     while (std::chrono::steady_clock::now() - start_time < std::chrono::milliseconds(5000)) {
@@ -792,11 +792,11 @@ static bool run_scenario_a(const char* fixture_exe, std::string& out_primary_err
         return false;
     }
 
-#ifdef REMEDY_TEST_WORKER_TREE_SEAM
+#ifdef REVOKE_TEST_WORKER_TREE_SEAM
     uint32_t limit_flags = 0;
     uint32_t active_procs = 0;
-    if (!remedy_test_worker_job_get_policy(ctx.token, &limit_flags, &active_procs)) {
-        ctx.record_error("remedy_test_worker_job_get_policy seam query failed");
+    if (!revoke_test_worker_job_get_policy(ctx.token, &limit_flags, &active_procs)) {
+        ctx.record_error("revoke_test_worker_job_get_policy seam query failed");
         ctx.execute_cleanup(test_dir);
         out_primary_err = ctx.first_error;
         out_cleanup_err = ctx.cleanup_errors;
@@ -832,21 +832,21 @@ static bool run_scenario_a(const char* fixture_exe, std::string& out_primary_err
     }
 
     bool c_root = false, c_child = false, c_grandchild = false;
-    if (!remedy_test_worker_job_contains_pid(ctx.token, ctx.root_pid, &c_root) || !c_root) {
+    if (!revoke_test_worker_job_contains_pid(ctx.token, ctx.root_pid, &c_root) || !c_root) {
         ctx.record_error("Job Object does not contain root PID");
         ctx.execute_cleanup(test_dir);
         out_primary_err = ctx.first_error;
         out_cleanup_err = ctx.cleanup_errors;
         return false;
     }
-    if (!remedy_test_worker_job_contains_pid(ctx.token, ctx.child_pid, &c_child) || !c_child) {
+    if (!revoke_test_worker_job_contains_pid(ctx.token, ctx.child_pid, &c_child) || !c_child) {
         ctx.record_error("Job Object does not contain child PID");
         ctx.execute_cleanup(test_dir);
         out_primary_err = ctx.first_error;
         out_cleanup_err = ctx.cleanup_errors;
         return false;
     }
-    if (!remedy_test_worker_job_contains_pid(ctx.token, ctx.grandchild_pid, &c_grandchild) || !c_grandchild) {
+    if (!revoke_test_worker_job_contains_pid(ctx.token, ctx.grandchild_pid, &c_grandchild) || !c_grandchild) {
         ctx.record_error("Job Object does not contain grandchild PID");
         ctx.execute_cleanup(test_dir);
         out_primary_err = ctx.first_error;
@@ -855,8 +855,8 @@ static bool run_scenario_a(const char* fixture_exe, std::string& out_primary_err
     }
 #endif
 
-    remedy_err_t term_err = worker_port_terminate(ctx.token);
-    if (term_err != REMEDY_OK) {
+    revoke_err_t term_err = worker_port_terminate(ctx.token);
+    if (term_err != REVOKE_OK) {
         ctx.record_error("worker_port_terminate failed: " + std::to_string(term_err));
         ctx.execute_cleanup(test_dir);
         out_primary_err = ctx.first_error;
@@ -866,8 +866,8 @@ static bool run_scenario_a(const char* fixture_exe, std::string& out_primary_err
     ctx.job_termination_succeeded = true;
 
     bool died = false;
-    remedy_err_t wait_err = worker_port_wait_for_death(ctx.token, 2000, &died);
-    if (wait_err != REMEDY_OK || !died) {
+    revoke_err_t wait_err = worker_port_wait_for_death(ctx.token, 2000, &died);
+    if (wait_err != REVOKE_OK || !died) {
         ctx.record_error("worker_port_wait_for_death did not observe root death");
         ctx.execute_cleanup(test_dir);
         out_primary_err = ctx.first_error;
@@ -896,34 +896,34 @@ static bool run_scenario_a(const char* fixture_exe, std::string& out_primary_err
         return false;
     }
 
-    remedy_worker_token_t retired_token = ctx.token;
-    remedy_err_t des_err = worker_port_destroy(ctx.token);
-    if (des_err != REMEDY_OK) {
+    revoke_worker_token_t retired_token = ctx.token;
+    revoke_err_t des_err = worker_port_destroy(ctx.token);
+    if (des_err != REVOKE_OK) {
         ctx.record_error("worker_port_destroy failed: " + std::to_string(des_err));
         ctx.execute_cleanup(test_dir);
         out_primary_err = ctx.first_error;
         out_cleanup_err = ctx.cleanup_errors;
         return false;
     }
-    ctx.token = REMEDY_INVALID_WORKER_TOKEN;
+    ctx.token = REVOKE_INVALID_WORKER_TOKEN;
 
     bool test_died = true;
-    remedy_err_t r_wait = worker_port_wait_for_death(retired_token, 100, &test_died);
-    if (r_wait != REMEDY_ERR_INVALID_ARGUMENT || test_died) {
+    revoke_err_t r_wait = worker_port_wait_for_death(retired_token, 100, &test_died);
+    if (r_wait != REVOKE_ERR_INVALID_ARGUMENT || test_died) {
         ctx.record_error("worker_port_wait_for_death on retired token failed");
         ctx.execute_cleanup(test_dir);
         out_primary_err = ctx.first_error;
         out_cleanup_err = ctx.cleanup_errors;
         return false;
     }
-    if (worker_port_terminate(retired_token) != REMEDY_ERR_INVALID_ARGUMENT) {
+    if (worker_port_terminate(retired_token) != REVOKE_ERR_INVALID_ARGUMENT) {
         ctx.record_error("worker_port_terminate on retired token failed");
         ctx.execute_cleanup(test_dir);
         out_primary_err = ctx.first_error;
         out_cleanup_err = ctx.cleanup_errors;
         return false;
     }
-    if (worker_port_destroy(retired_token) != REMEDY_ERR_INVALID_ARGUMENT) {
+    if (worker_port_destroy(retired_token) != REVOKE_ERR_INVALID_ARGUMENT) {
         ctx.record_error("worker_port_destroy on retired token failed");
         ctx.execute_cleanup(test_dir);
         out_primary_err = ctx.first_error;
@@ -941,7 +941,7 @@ static bool run_scenario_b(const char* fixture_exe, std::string& out_primary_err
     test_scenario_context ctx;
 
     fs::path test_dir = fs::temp_directory_path() / (
-        "remedy_test_tree_scen_b_p" + std::to_string(GetCurrentProcessId())
+        "revoke_test_tree_scen_b_p" + std::to_string(GetCurrentProcessId())
     );
     std::string cd_diag;
     if (!create_dir_clean_checked(test_dir, cd_diag)) {
@@ -952,7 +952,7 @@ static bool run_scenario_b(const char* fixture_exe, std::string& out_primary_err
     }
     std::string test_dir_str = test_dir.string();
 
-    fs::path mode_path = test_dir / "remedy_fixture_tree_mode.tmp";
+    fs::path mode_path = test_dir / "revoke_fixture_tree_mode.tmp";
     const char mode_content[] = "ROOT_EXIT_EARLY";
     atomic_publish_result pub = atomic_publish_file(
         (test_dir / "mode.tmp").c_str(),
@@ -968,12 +968,12 @@ static bool run_scenario_b(const char* fixture_exe, std::string& out_primary_err
         return false;
     }
 
-    remedy_worker_config_t config = { 0 };
+    revoke_worker_config_t config = { 0 };
     config.executable_path = fixture_exe;
     config.working_directory = test_dir_str.c_str();
 
-    remedy_err_t start_err = worker_port_start(&config, &ctx.token);
-    if (start_err != REMEDY_OK || ctx.token == REMEDY_INVALID_WORKER_TOKEN) {
+    revoke_err_t start_err = worker_port_start(&config, &ctx.token);
+    if (start_err != REVOKE_OK || ctx.token == REVOKE_INVALID_WORKER_TOKEN) {
         ctx.record_error("worker_port_start failed: " + std::to_string(start_err));
         ctx.execute_cleanup(test_dir);
         out_primary_err = ctx.first_error;
@@ -981,8 +981,8 @@ static bool run_scenario_b(const char* fixture_exe, std::string& out_primary_err
         return false;
     }
 
-    fs::path normal_manifest = test_dir / "remedy_tree_manifest.ready";
-    fs::path emergency_manifest = test_dir / "remedy_breakaway_emergency.ready";
+    fs::path normal_manifest = test_dir / "revoke_tree_manifest.ready";
+    fs::path emergency_manifest = test_dir / "revoke_breakaway_emergency.ready";
 
     auto start_time = std::chrono::steady_clock::now();
     while (std::chrono::steady_clock::now() - start_time < std::chrono::milliseconds(5000)) {
@@ -1142,23 +1142,23 @@ static bool run_scenario_b(const char* fixture_exe, std::string& out_primary_err
         return false;
     }
 
-#ifdef REMEDY_TEST_WORKER_TREE_SEAM
+#ifdef REVOKE_TEST_WORKER_TREE_SEAM
     bool c_root_pre = false, c_child_pre = false, c_grandchild_pre = false;
-    if (!remedy_test_worker_job_contains_pid(ctx.token, ctx.root_pid, &c_root_pre) || !c_root_pre) {
+    if (!revoke_test_worker_job_contains_pid(ctx.token, ctx.root_pid, &c_root_pre) || !c_root_pre) {
         ctx.record_error("Job Object does not contain root PID before root exit release");
         ctx.execute_cleanup(test_dir);
         out_primary_err = ctx.first_error;
         out_cleanup_err = ctx.cleanup_errors;
         return false;
     }
-    if (!remedy_test_worker_job_contains_pid(ctx.token, ctx.child_pid, &c_child_pre) || !c_child_pre) {
+    if (!revoke_test_worker_job_contains_pid(ctx.token, ctx.child_pid, &c_child_pre) || !c_child_pre) {
         ctx.record_error("Job Object does not contain child PID before root exit release");
         ctx.execute_cleanup(test_dir);
         out_primary_err = ctx.first_error;
         out_cleanup_err = ctx.cleanup_errors;
         return false;
     }
-    if (!remedy_test_worker_job_contains_pid(ctx.token, ctx.grandchild_pid, &c_grandchild_pre) || !c_grandchild_pre) {
+    if (!revoke_test_worker_job_contains_pid(ctx.token, ctx.grandchild_pid, &c_grandchild_pre) || !c_grandchild_pre) {
         ctx.record_error("Job Object does not contain grandchild PID before root exit release");
         ctx.execute_cleanup(test_dir);
         out_primary_err = ctx.first_error;
@@ -1168,8 +1168,8 @@ static bool run_scenario_b(const char* fixture_exe, std::string& out_primary_err
 #endif
 
     // Publish release marker AFTER root, child, and grandchild membership checks (Correction 3)
-    fs::path release_tmp = test_dir / "remedy_root_exit.tmp";
-    fs::path release_marker = test_dir / "remedy_root_exit.release";
+    fs::path release_tmp = test_dir / "revoke_root_exit.tmp";
+    fs::path release_marker = test_dir / "revoke_root_exit.release";
     const char release_content[] = "RELEASE";
     atomic_publish_result r_pub = atomic_publish_file(release_tmp.c_str(), release_marker.c_str(), release_content, sizeof(release_content) - 1);
     if (!r_pub.success) {
@@ -1192,8 +1192,8 @@ static bool run_scenario_b(const char* fixture_exe, std::string& out_primary_err
     }
 
     bool died = false;
-    remedy_err_t wait_err = worker_port_wait_for_death(ctx.token, 100, &died);
-    if (wait_err != REMEDY_OK || !died) {
+    revoke_err_t wait_err = worker_port_wait_for_death(ctx.token, 100, &died);
+    if (wait_err != REVOKE_OK || !died) {
         ctx.record_error("worker_port_wait_for_death did not report root death after root exit");
         ctx.execute_cleanup(test_dir);
         out_primary_err = ctx.first_error;
@@ -1223,16 +1223,16 @@ static bool run_scenario_b(const char* fixture_exe, std::string& out_primary_err
         return false;
     }
 
-#ifdef REMEDY_TEST_WORKER_TREE_SEAM
+#ifdef REVOKE_TEST_WORKER_TREE_SEAM
     bool c_child_post = false, c_grandchild_post = false;
-    if (!remedy_test_worker_job_contains_pid(ctx.token, ctx.child_pid, &c_child_post) || !c_child_post) {
+    if (!revoke_test_worker_job_contains_pid(ctx.token, ctx.child_pid, &c_child_post) || !c_child_post) {
         ctx.record_error("Job Object lost child PID after root exit");
         ctx.execute_cleanup(test_dir);
         out_primary_err = ctx.first_error;
         out_cleanup_err = ctx.cleanup_errors;
         return false;
     }
-    if (!remedy_test_worker_job_contains_pid(ctx.token, ctx.grandchild_pid, &c_grandchild_post) || !c_grandchild_post) {
+    if (!revoke_test_worker_job_contains_pid(ctx.token, ctx.grandchild_pid, &c_grandchild_post) || !c_grandchild_post) {
         ctx.record_error("Job Object lost grandchild PID after root exit");
         ctx.execute_cleanup(test_dir);
         out_primary_err = ctx.first_error;
@@ -1242,9 +1242,9 @@ static bool run_scenario_b(const char* fixture_exe, std::string& out_primary_err
 #endif
 
     // Pre-terminate destroy rejection
-    remedy_err_t pre_des = worker_port_destroy(ctx.token);
-    if (pre_des != REMEDY_ERR_INVALID_ARGUMENT) {
-        ctx.record_error("worker_port_destroy before terminate did not return REMEDY_ERR_INVALID_ARGUMENT");
+    revoke_err_t pre_des = worker_port_destroy(ctx.token);
+    if (pre_des != REVOKE_ERR_INVALID_ARGUMENT) {
+        ctx.record_error("worker_port_destroy before terminate did not return REVOKE_ERR_INVALID_ARGUMENT");
         ctx.execute_cleanup(test_dir);
         out_primary_err = ctx.first_error;
         out_cleanup_err = ctx.cleanup_errors;
@@ -1252,8 +1252,8 @@ static bool run_scenario_b(const char* fixture_exe, std::string& out_primary_err
     }
 
     // Terminate Job
-    remedy_err_t term_err = worker_port_terminate(ctx.token);
-    if (term_err != REMEDY_OK) {
+    revoke_err_t term_err = worker_port_terminate(ctx.token);
+    if (term_err != REVOKE_OK) {
         ctx.record_error("worker_port_terminate failed: " + std::to_string(term_err));
         ctx.execute_cleanup(test_dir);
         out_primary_err = ctx.first_error;
@@ -1282,34 +1282,34 @@ static bool run_scenario_b(const char* fixture_exe, std::string& out_primary_err
         return false;
     }
 
-    remedy_worker_token_t retired_token = ctx.token;
-    remedy_err_t des_err = worker_port_destroy(ctx.token);
-    if (des_err != REMEDY_OK) {
+    revoke_worker_token_t retired_token = ctx.token;
+    revoke_err_t des_err = worker_port_destroy(ctx.token);
+    if (des_err != REVOKE_OK) {
         ctx.record_error("worker_port_destroy failed: " + std::to_string(des_err));
         ctx.execute_cleanup(test_dir);
         out_primary_err = ctx.first_error;
         out_cleanup_err = ctx.cleanup_errors;
         return false;
     }
-    ctx.token = REMEDY_INVALID_WORKER_TOKEN;
+    ctx.token = REVOKE_INVALID_WORKER_TOKEN;
 
     bool test_died = true;
-    remedy_err_t r_wait = worker_port_wait_for_death(retired_token, 100, &test_died);
-    if (r_wait != REMEDY_ERR_INVALID_ARGUMENT || test_died) {
+    revoke_err_t r_wait = worker_port_wait_for_death(retired_token, 100, &test_died);
+    if (r_wait != REVOKE_ERR_INVALID_ARGUMENT || test_died) {
         ctx.record_error("worker_port_wait_for_death on retired token failed");
         ctx.execute_cleanup(test_dir);
         out_primary_err = ctx.first_error;
         out_cleanup_err = ctx.cleanup_errors;
         return false;
     }
-    if (worker_port_terminate(retired_token) != REMEDY_ERR_INVALID_ARGUMENT) {
+    if (worker_port_terminate(retired_token) != REVOKE_ERR_INVALID_ARGUMENT) {
         ctx.record_error("worker_port_terminate on retired token failed");
         ctx.execute_cleanup(test_dir);
         out_primary_err = ctx.first_error;
         out_cleanup_err = ctx.cleanup_errors;
         return false;
     }
-    if (worker_port_destroy(retired_token) != REMEDY_ERR_INVALID_ARGUMENT) {
+    if (worker_port_destroy(retired_token) != REVOKE_ERR_INVALID_ARGUMENT) {
         ctx.record_error("worker_port_destroy on retired token failed");
         ctx.execute_cleanup(test_dir);
         out_primary_err = ctx.first_error;
@@ -1317,18 +1317,18 @@ static bool run_scenario_b(const char* fixture_exe, std::string& out_primary_err
         return false;
     }
 
-#ifdef REMEDY_TEST_WORKER_TREE_SEAM
+#ifdef REVOKE_TEST_WORKER_TREE_SEAM
     uint32_t flags = 0, procs = 0;
-    if (remedy_test_worker_job_get_policy(retired_token, &flags, &procs)) {
-        ctx.record_error("remedy_test_worker_job_get_policy unexpectedly succeeded on retired token");
+    if (revoke_test_worker_job_get_policy(retired_token, &flags, &procs)) {
+        ctx.record_error("revoke_test_worker_job_get_policy unexpectedly succeeded on retired token");
         ctx.execute_cleanup(test_dir);
         out_primary_err = ctx.first_error;
         out_cleanup_err = ctx.cleanup_errors;
         return false;
     }
     bool contains = true;
-    if (remedy_test_worker_job_contains_pid(retired_token, ctx.child_pid, &contains) || contains) {
-        ctx.record_error("remedy_test_worker_job_contains_pid unexpectedly succeeded on retired token");
+    if (revoke_test_worker_job_contains_pid(retired_token, ctx.child_pid, &contains) || contains) {
+        ctx.record_error("revoke_test_worker_job_contains_pid unexpectedly succeeded on retired token");
         ctx.execute_cleanup(test_dir);
         out_primary_err = ctx.first_error;
         out_cleanup_err = ctx.cleanup_errors;
@@ -1344,25 +1344,25 @@ static bool run_scenario_b(const char* fixture_exe, std::string& out_primary_err
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        fprintf(stderr, "Usage: %s <path_to_remedy_worker_fixture.exe>\n", argv[0]);
+        fprintf(stderr, "Usage: %s <path_to_revoke_worker_fixture.exe>\n", argv[0]);
         return 1;
     }
 
     const char* fixture_exe = argv[1];
 
-#ifdef REMEDY_TEST_WORKER_TREE_SEAM
+#ifdef REVOKE_TEST_WORKER_TREE_SEAM
     // Invalid token seam assertions
     {
         uint32_t limit_flags = 0x1234;
         uint32_t active_procs = 0x5678;
-        bool seam_policy_ok = remedy_test_worker_job_get_policy(REMEDY_INVALID_WORKER_TOKEN, &limit_flags, &active_procs);
+        bool seam_policy_ok = revoke_test_worker_job_get_policy(REVOKE_INVALID_WORKER_TOKEN, &limit_flags, &active_procs);
         if (seam_policy_ok || limit_flags != 0 || active_procs != 0) {
             fprintf(stderr, "Invalid token seam policy check failed.\n");
             return 1;
         }
 
         bool contains_flag = true;
-        bool seam_contains_ok = remedy_test_worker_job_contains_pid(REMEDY_INVALID_WORKER_TOKEN, 1234, &contains_flag);
+        bool seam_contains_ok = revoke_test_worker_job_contains_pid(REVOKE_INVALID_WORKER_TOKEN, 1234, &contains_flag);
         if (seam_contains_ok || contains_flag) {
             fprintf(stderr, "Invalid token seam contains check failed.\n");
             return 1;

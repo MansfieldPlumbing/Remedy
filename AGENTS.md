@@ -1,6 +1,6 @@
 # Agent Guidelines and Rules
 
-All autonomous and human contributors working on the Remedy repository must adhere strictly to the following rules:
+All autonomous and human contributors working on the Revoke repository must adhere strictly to the following rules:
 
 - Work on exactly one invariant per branch.
 - Execute exactly one semantic objective per commit.

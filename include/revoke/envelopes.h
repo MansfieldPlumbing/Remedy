@@ -1,8 +1,8 @@
-#ifndef REMEDY_ENVELOPES_H
-#define REMEDY_ENVELOPES_H
+#ifndef REVOKE_ENVELOPES_H
+#define REVOKE_ENVELOPES_H
 
-#include "remedy/types.h"
-#include "remedy/handle.h"
+#include "revoke/types.h"
+#include "revoke/handle.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -12,24 +12,24 @@ extern "C" {
 
 typedef struct {
     uint64_t request_id;
-    remedy_handle_t domain_handle;
-    remedy_handle_t lease_handle;
+    revoke_handle_t domain_handle;
+    revoke_handle_t lease_handle;
     uint32_t operation_id;
-    remedy_handle_t payload_arena_handle;
+    revoke_handle_t payload_arena_handle;
     uint32_t payload_offset;
     uint32_t payload_length;
     uint64_t deadline_ms;
-    remedy_handle_t reply_channel_handle;
-} remedy_request_envelope_t;
+    revoke_handle_t reply_channel_handle;
+} revoke_request_envelope_t;
 
 typedef struct {
     uint64_t request_id;
     int32_t  status_code;
-    remedy_handle_t result_arena_handle;
+    revoke_handle_t result_arena_handle;
     uint32_t result_offset;
     uint32_t result_length;
     uint64_t receipt_reference;
-} remedy_completion_envelope_t;
+} revoke_completion_envelope_t;
 
 #pragma pack(pop)
 
@@ -37,4 +37,4 @@ typedef struct {
 }
 #endif
 
-#endif // REMEDY_ENVELOPES_H
+#endif // REVOKE_ENVELOPES_H
