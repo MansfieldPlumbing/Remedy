@@ -1,4 +1,4 @@
-#include "remedy/ports/worker_port.h"
+#include "revoke/ports/worker_port.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -33,50 +33,50 @@ struct win32_worker_entry {
 };
 
 static std::mutex g_worker_mutex;
-static std::unordered_map<remedy_worker_token_t, win32_worker_entry*> g_worker_table;
-static remedy_worker_token_t g_next_worker_token = 1;
+static std::unordered_map<revoke_worker_token_t, win32_worker_entry*> g_worker_table;
+static revoke_worker_token_t g_next_worker_token = 1;
 
-#ifdef REMEDY_TEST_STAGED_FAILURE_SEAM
+#ifdef REVOKE_TEST_STAGED_FAILURE_SEAM
 static int g_test_fail_stage = 0;
 static HANDLE g_test_observer_handle = NULL;
 
 extern "C" {
-void remedy_test_set_fail_stage(int stage) {
+void revoke_test_set_fail_stage(int stage) {
     g_test_fail_stage = stage;
 }
 
-HANDLE remedy_test_take_observer_handle(void) {
+HANDLE revoke_test_take_observer_handle(void) {
     HANDLE h = g_test_observer_handle;
     g_test_observer_handle = NULL;
     return h;
 }
 
-size_t remedy_test_get_registry_size(void) {
+size_t revoke_test_get_registry_size(void) {
     std::lock_guard<std::mutex> lock(g_worker_mutex);
     return g_worker_table.size();
 }
 }
 #endif
 
-#ifdef REMEDY_TEST_WORKER_RUNDOWN_SEAM
+#ifdef REVOKE_TEST_WORKER_RUNDOWN_SEAM
 static std::mutex g_seam_mutex;
 static std::condition_variable g_seam_cv;
-static remedy_worker_token_t g_seam_armed_pause_token = REMEDY_INVALID_WORKER_TOKEN;
-static remedy_worker_token_t g_seam_paused_token = REMEDY_INVALID_WORKER_TOKEN;
+static revoke_worker_token_t g_seam_armed_pause_token = REVOKE_INVALID_WORKER_TOKEN;
+static revoke_worker_token_t g_seam_paused_token = REVOKE_INVALID_WORKER_TOKEN;
 static bool g_seam_lease_paused = false;
 static bool g_seam_lease_release = false;
-static remedy_worker_token_t g_seam_finalizer_waiting_token = REMEDY_INVALID_WORKER_TOKEN;
+static revoke_worker_token_t g_seam_finalizer_waiting_token = REVOKE_INVALID_WORKER_TOKEN;
 static bool g_seam_finalizer_waiting = false;
-static remedy_worker_token_t g_seam_fail_next_process_close_token = REMEDY_INVALID_WORKER_TOKEN;
+static revoke_worker_token_t g_seam_fail_next_process_close_token = REVOKE_INVALID_WORKER_TOKEN;
 static uint32_t g_seam_finalizer_completions = 0;
 static uint32_t g_seam_entry_deletions = 0;
 static uint32_t g_seam_process_closures = 0;
 static uint32_t g_seam_thread_closures = 0;
 
-static void remedy_test_check_lease_pause(remedy_worker_token_t token) {
+static void revoke_test_check_lease_pause(revoke_worker_token_t token) {
     std::unique_lock<std::mutex> seam_lock(g_seam_mutex);
     if (g_seam_armed_pause_token == token) {
-        g_seam_armed_pause_token = REMEDY_INVALID_WORKER_TOKEN;
+        g_seam_armed_pause_token = REVOKE_INVALID_WORKER_TOKEN;
         g_seam_paused_token = token;
         g_seam_lease_paused = true;
         g_seam_cv.notify_all();
@@ -86,7 +86,7 @@ static void remedy_test_check_lease_pause(remedy_worker_token_t token) {
         if (!wait_ok) {
             std::abort();
         }
-        g_seam_paused_token = REMEDY_INVALID_WORKER_TOKEN;
+        g_seam_paused_token = REVOKE_INVALID_WORKER_TOKEN;
     }
 }
 #endif
@@ -129,9 +129,9 @@ private:
     }
 };
 
-static remedy_err_t worker_entry_acquire_lease(remedy_worker_token_t token, worker_lease_guard* out_lease) {
-    if (token == REMEDY_INVALID_WORKER_TOKEN || !out_lease) {
-        return REMEDY_ERR_INVALID_ARGUMENT;
+static revoke_err_t worker_entry_acquire_lease(revoke_worker_token_t token, worker_lease_guard* out_lease) {
+    if (token == REVOKE_INVALID_WORKER_TOKEN || !out_lease) {
+        return REVOKE_ERR_INVALID_ARGUMENT;
     }
     if (out_lease->get() != nullptr) {
         std::abort();
@@ -139,22 +139,22 @@ static remedy_err_t worker_entry_acquire_lease(remedy_worker_token_t token, work
     std::lock_guard<std::mutex> lock(g_worker_mutex);
     auto it = g_worker_table.find(token);
     if (it == g_worker_table.end()) {
-        return REMEDY_ERR_INVALID_ARGUMENT;
+        return REVOKE_ERR_INVALID_ARGUMENT;
     }
     win32_worker_entry* entry = it->second;
     std::lock_guard<std::mutex> entry_lock(entry->entry_mutex);
     if (entry->state != worker_entry_state::LIVE) {
-        return REMEDY_ERR_REVOKING;
+        return REVOKE_ERR_REVOKING;
     }
     if (entry->active_leases == (std::numeric_limits<uint32_t>::max)()) {
         std::abort();
     }
     entry->active_leases++;
     out_lease->adopt(entry);
-    return REMEDY_OK;
+    return REVOKE_OK;
 }
 
-[[noreturn]] static void remedy_fail_stop_containment_breach(HANDLE& hProcess, HANDLE& hThread, HANDLE& hJob) {
+[[noreturn]] static void revoke_fail_stop_containment_breach(HANDLE& hProcess, HANDLE& hThread, HANDLE& hJob) {
     while (hProcess != NULL) {
         DWORD waitRes = WaitForSingleObject(hProcess, 100);
         if (waitRes == WAIT_OBJECT_0) {
@@ -221,7 +221,7 @@ static void do_verified_failure_cleanup(HANDLE& hProcess, HANDLE& hThread, HANDL
         DWORD waitRes = WaitForSingleObject(hProcess, 2000);
         if (waitRes != WAIT_OBJECT_0 || !term_requested) {
             if (waitRes != WAIT_OBJECT_0) {
-                remedy_fail_stop_containment_breach(hProcess, hThread, hJob);
+                revoke_fail_stop_containment_breach(hProcess, hThread, hJob);
             }
         }
     }
@@ -230,7 +230,7 @@ static void do_verified_failure_cleanup(HANDLE& hProcess, HANDLE& hThread, HANDL
         if (CloseHandle(hThread)) {
             hThread = NULL;
         } else {
-            remedy_fail_stop_containment_breach(hProcess, hThread, hJob);
+            revoke_fail_stop_containment_breach(hProcess, hThread, hJob);
         }
     }
 
@@ -238,7 +238,7 @@ static void do_verified_failure_cleanup(HANDLE& hProcess, HANDLE& hThread, HANDL
         if (CloseHandle(hProcess)) {
             hProcess = NULL;
         } else {
-            remedy_fail_stop_containment_breach(hProcess, hThread, hJob);
+            revoke_fail_stop_containment_breach(hProcess, hThread, hJob);
         }
     }
 
@@ -246,7 +246,7 @@ static void do_verified_failure_cleanup(HANDLE& hProcess, HANDLE& hThread, HANDL
         if (CloseHandle(hJob)) {
             hJob = NULL;
         } else {
-            remedy_fail_stop_containment_breach(hProcess, hThread, hJob);
+            revoke_fail_stop_containment_breach(hProcess, hThread, hJob);
         }
     }
 }
@@ -285,34 +285,34 @@ static bool convert_utf8_to_wide(const char* utf8_str, std::wstring& out_wide) {
     return true;
 }
 
-static remedy_worker_token_t generate_unique_token_locked() {
-    remedy_worker_token_t start_token = g_next_worker_token;
+static revoke_worker_token_t generate_unique_token_locked() {
+    revoke_worker_token_t start_token = g_next_worker_token;
     do {
-        remedy_worker_token_t token = g_next_worker_token++;
-        if (token == REMEDY_INVALID_WORKER_TOKEN) {
+        revoke_worker_token_t token = g_next_worker_token++;
+        if (token == REVOKE_INVALID_WORKER_TOKEN) {
             token = g_next_worker_token++;
         }
         if (g_worker_table.find(token) == g_worker_table.end()) {
             return token;
         }
     } while (g_next_worker_token != start_token);
-    return REMEDY_INVALID_WORKER_TOKEN;
+    return REVOKE_INVALID_WORKER_TOKEN;
 }
 
 extern "C" {
 
-remedy_err_t worker_port_start(const remedy_worker_config_t* config, remedy_worker_token_t* out_token) {
-    if (!out_token) return REMEDY_ERR_INVALID_ARGUMENT;
-    *out_token = REMEDY_INVALID_WORKER_TOKEN;
+revoke_err_t worker_port_start(const revoke_worker_config_t* config, revoke_worker_token_t* out_token) {
+    if (!out_token) return REVOKE_ERR_INVALID_ARGUMENT;
+    *out_token = REVOKE_INVALID_WORKER_TOKEN;
 
-    if (!config) return REMEDY_ERR_INVALID_ARGUMENT;
-    if (!config->executable_path || config->executable_path[0] == '\0') return REMEDY_ERR_INVALID_ARGUMENT;
+    if (!config) return REVOKE_ERR_INVALID_ARGUMENT;
+    if (!config->executable_path || config->executable_path[0] == '\0') return REVOKE_ERR_INVALID_ARGUMENT;
 
-    if (config->arguments && config->arguments[0] != '\0') return REMEDY_ERR_NOT_SUPPORTED;
-    if (config->channel_nonce && config->channel_nonce[0] != '\0') return REMEDY_ERR_NOT_SUPPORTED;
-    if (config->timeout_ms != 0) return REMEDY_ERR_NOT_SUPPORTED;
+    if (config->arguments && config->arguments[0] != '\0') return REVOKE_ERR_NOT_SUPPORTED;
+    if (config->channel_nonce && config->channel_nonce[0] != '\0') return REVOKE_ERR_NOT_SUPPORTED;
+    if (config->timeout_ms != 0) return REVOKE_ERR_NOT_SUPPORTED;
 
-    if (!is_valid_absolute_path(config->executable_path)) return REMEDY_ERR_INVALID_ARGUMENT;
+    if (!is_valid_absolute_path(config->executable_path)) return REVOKE_ERR_INVALID_ARGUMENT;
 
     std::wstring wExecPath;
     std::wstring wWorkDir;
@@ -320,17 +320,17 @@ remedy_err_t worker_port_start(const remedy_worker_config_t* config, remedy_work
 
     try {
         if (!convert_utf8_to_wide(config->executable_path, wExecPath)) {
-            return REMEDY_ERR_INVALID_ARGUMENT;
+            return REVOKE_ERR_INVALID_ARGUMENT;
         }
 
         if (config->working_directory && config->working_directory[0] != '\0') {
             if (!convert_utf8_to_wide(config->working_directory, wWorkDir)) {
-                return REMEDY_ERR_INVALID_ARGUMENT;
+                return REVOKE_ERR_INVALID_ARGUMENT;
             }
             pWorkDir = wWorkDir.c_str();
         }
     } catch (const std::bad_alloc&) {
-        return REMEDY_ERR_OUT_OF_MEMORY;
+        return REVOKE_ERR_OUT_OF_MEMORY;
     }
 
     STARTUPINFOW si = { sizeof(si) };
@@ -344,9 +344,9 @@ remedy_err_t worker_port_start(const remedy_worker_config_t* config, remedy_work
         NULL, pWorkDir, &si, &pi
     );
 
-    if (!procSuccess) return REMEDY_ERR_IPC_FAILURE;
+    if (!procSuccess) return REVOKE_ERR_IPC_FAILURE;
 
-#ifdef REMEDY_TEST_STAGED_FAILURE_SEAM
+#ifdef REVOKE_TEST_STAGED_FAILURE_SEAM
     if (g_test_fail_stage >= 1 && g_test_fail_stage <= 7) {
         BOOL dupOk = DuplicateHandle(
             GetCurrentProcess(), pi.hProcess,
@@ -356,26 +356,26 @@ remedy_err_t worker_port_start(const remedy_worker_config_t* config, remedy_work
         if (!dupOk) {
             HANDLE hJob = NULL;
             do_verified_failure_cleanup(pi.hProcess, pi.hThread, hJob, false);
-            return REMEDY_ERR_CONTAINMENT_FAILED;
+            return REVOKE_ERR_CONTAINMENT_FAILED;
         }
     }
     if (g_test_fail_stage == 1) {
         HANDLE hJob = NULL;
         do_verified_failure_cleanup(pi.hProcess, pi.hThread, hJob, false);
-        return REMEDY_ERR_CONTAINMENT_FAILED;
+        return REVOKE_ERR_CONTAINMENT_FAILED;
     }
 #endif
 
     HANDLE hJob = CreateJobObjectW(NULL, NULL);
     if (!hJob) {
         do_verified_failure_cleanup(pi.hProcess, pi.hThread, hJob, false);
-        return REMEDY_ERR_CONTAINMENT_FAILED;
+        return REVOKE_ERR_CONTAINMENT_FAILED;
     }
 
-#ifdef REMEDY_TEST_STAGED_FAILURE_SEAM
+#ifdef REVOKE_TEST_STAGED_FAILURE_SEAM
     if (g_test_fail_stage == 2) {
         do_verified_failure_cleanup(pi.hProcess, pi.hThread, hJob, false);
-        return REMEDY_ERR_CONTAINMENT_FAILED;
+        return REVOKE_ERR_CONTAINMENT_FAILED;
     }
 #endif
 
@@ -383,51 +383,51 @@ remedy_err_t worker_port_start(const remedy_worker_config_t* config, remedy_work
     jeli.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
     if (!SetInformationJobObject(hJob, JobObjectExtendedLimitInformation, &jeli, sizeof(jeli))) {
         do_verified_failure_cleanup(pi.hProcess, pi.hThread, hJob, false);
-        return REMEDY_ERR_CONTAINMENT_FAILED;
+        return REVOKE_ERR_CONTAINMENT_FAILED;
     }
 
-#ifdef REMEDY_TEST_STAGED_FAILURE_SEAM
+#ifdef REVOKE_TEST_STAGED_FAILURE_SEAM
     if (g_test_fail_stage == 3) {
         do_verified_failure_cleanup(pi.hProcess, pi.hThread, hJob, false);
-        return REMEDY_ERR_CONTAINMENT_FAILED;
+        return REVOKE_ERR_CONTAINMENT_FAILED;
     }
 #endif
 
     if (!AssignProcessToJobObject(hJob, pi.hProcess)) {
         do_verified_failure_cleanup(pi.hProcess, pi.hThread, hJob, false);
-        return REMEDY_ERR_CONTAINMENT_FAILED;
+        return REVOKE_ERR_CONTAINMENT_FAILED;
     }
 
-#ifdef REMEDY_TEST_STAGED_FAILURE_SEAM
+#ifdef REVOKE_TEST_STAGED_FAILURE_SEAM
     if (g_test_fail_stage == 4) {
         do_verified_failure_cleanup(pi.hProcess, pi.hThread, hJob, true);
-        return REMEDY_ERR_CONTAINMENT_FAILED;
+        return REVOKE_ERR_CONTAINMENT_FAILED;
     }
 #endif
 
     if (ResumeThread(pi.hThread) == (DWORD)-1) {
         do_verified_failure_cleanup(pi.hProcess, pi.hThread, hJob, true);
-        return REMEDY_ERR_CONTAINMENT_FAILED;
+        return REVOKE_ERR_CONTAINMENT_FAILED;
     }
 
-#ifdef REMEDY_TEST_STAGED_FAILURE_SEAM
+#ifdef REVOKE_TEST_STAGED_FAILURE_SEAM
     if (g_test_fail_stage == 5) {
         do_verified_failure_cleanup(pi.hProcess, pi.hThread, hJob, true);
-        return REMEDY_ERR_CONTAINMENT_FAILED;
+        return REVOKE_ERR_CONTAINMENT_FAILED;
     }
 #endif
 
     win32_worker_entry* entry = new (std::nothrow) win32_worker_entry();
     if (!entry) {
         do_verified_failure_cleanup(pi.hProcess, pi.hThread, hJob, true);
-        return REMEDY_ERR_OUT_OF_MEMORY;
+        return REVOKE_ERR_OUT_OF_MEMORY;
     }
 
-#ifdef REMEDY_TEST_STAGED_FAILURE_SEAM
+#ifdef REVOKE_TEST_STAGED_FAILURE_SEAM
     if (g_test_fail_stage == 6) {
         delete entry;
         do_verified_failure_cleanup(pi.hProcess, pi.hThread, hJob, true);
-        return REMEDY_ERR_OUT_OF_MEMORY;
+        return REVOKE_ERR_OUT_OF_MEMORY;
     }
 #endif
 
@@ -436,23 +436,23 @@ remedy_err_t worker_port_start(const remedy_worker_config_t* config, remedy_work
     entry->job_handle = hJob;
     entry->process_id = pi.dwProcessId;
 
-    remedy_worker_token_t token = REMEDY_INVALID_WORKER_TOKEN;
+    revoke_worker_token_t token = REVOKE_INVALID_WORKER_TOKEN;
     try {
         std::lock_guard<std::mutex> lock(g_worker_mutex);
         token = generate_unique_token_locked();
-        if (token == REMEDY_INVALID_WORKER_TOKEN) {
+        if (token == REVOKE_INVALID_WORKER_TOKEN) {
             delete entry;
             do_verified_failure_cleanup(pi.hProcess, pi.hThread, hJob, true);
-            return REMEDY_ERR_OUT_OF_MEMORY;
+            return REVOKE_ERR_OUT_OF_MEMORY;
         }
         g_worker_table[token] = entry;
     } catch (const std::bad_alloc&) {
         delete entry;
         do_verified_failure_cleanup(pi.hProcess, pi.hThread, hJob, true);
-        return REMEDY_ERR_OUT_OF_MEMORY;
+        return REVOKE_ERR_OUT_OF_MEMORY;
     }
 
-#ifdef REMEDY_TEST_STAGED_FAILURE_SEAM
+#ifdef REVOKE_TEST_STAGED_FAILURE_SEAM
     if (g_test_fail_stage == 7) {
         {
             std::lock_guard<std::mutex> lock(g_worker_mutex);
@@ -460,104 +460,104 @@ remedy_err_t worker_port_start(const remedy_worker_config_t* config, remedy_work
         }
         do_verified_failure_cleanup(entry->process_handle, entry->thread_handle, entry->job_handle, true);
         if (entry->process_handle != NULL || entry->thread_handle != NULL || entry->job_handle != NULL) {
-            remedy_fail_stop_containment_breach(entry->process_handle, entry->thread_handle, entry->job_handle);
+            revoke_fail_stop_containment_breach(entry->process_handle, entry->thread_handle, entry->job_handle);
         }
         delete entry;
-        return REMEDY_ERR_CONTAINMENT_FAILED;
+        return REVOKE_ERR_CONTAINMENT_FAILED;
     }
 #endif
 
     *out_token = token;
-    return REMEDY_OK;
+    return REVOKE_OK;
 }
 
-remedy_err_t worker_port_request_quiescence(remedy_worker_token_t token) {
-    return REMEDY_ERR_NOT_SUPPORTED;
+revoke_err_t worker_port_request_quiescence(revoke_worker_token_t token) {
+    return REVOKE_ERR_NOT_SUPPORTED;
 }
 
-remedy_err_t worker_port_terminate(remedy_worker_token_t token) {
+revoke_err_t worker_port_terminate(revoke_worker_token_t token) {
     worker_lease_guard lease;
-    remedy_err_t err = worker_entry_acquire_lease(token, &lease);
-    if (err != REMEDY_OK) return err;
+    revoke_err_t err = worker_entry_acquire_lease(token, &lease);
+    if (err != REVOKE_OK) return err;
 
     win32_worker_entry* entry = lease.get();
     std::lock_guard<std::mutex> lock(entry->entry_mutex);
     if (entry->job_handle == NULL) {
-        return REMEDY_OK;
+        return REVOKE_OK;
     }
     if (CloseHandle(entry->job_handle)) {
         entry->job_handle = NULL;
-        return REMEDY_OK;
+        return REVOKE_OK;
     } else {
-        return REMEDY_ERR_CONTAINMENT_FAILED;
+        return REVOKE_ERR_CONTAINMENT_FAILED;
     }
 }
 
-remedy_err_t worker_port_wait_for_death(remedy_worker_token_t token, uint32_t timeout_ms, bool* out_died) {
-    if (!out_died) return REMEDY_ERR_INVALID_ARGUMENT;
+revoke_err_t worker_port_wait_for_death(revoke_worker_token_t token, uint32_t timeout_ms, bool* out_died) {
+    if (!out_died) return REVOKE_ERR_INVALID_ARGUMENT;
     *out_died = false;
 
     worker_lease_guard lease;
-    remedy_err_t err = worker_entry_acquire_lease(token, &lease);
-    if (err != REMEDY_OK) return err;
+    revoke_err_t err = worker_entry_acquire_lease(token, &lease);
+    if (err != REVOKE_OK) return err;
 
     win32_worker_entry* entry = lease.get();
     HANDLE hProc = NULL;
     {
         std::lock_guard<std::mutex> lock(entry->entry_mutex);
-        if (!entry->process_handle) return REMEDY_ERR_INVALID_ARGUMENT;
+        if (!entry->process_handle) return REVOKE_ERR_INVALID_ARGUMENT;
         hProc = entry->process_handle;
     }
 
-#ifdef REMEDY_TEST_WORKER_RUNDOWN_SEAM
-    remedy_test_check_lease_pause(token);
+#ifdef REVOKE_TEST_WORKER_RUNDOWN_SEAM
+    revoke_test_check_lease_pause(token);
 #endif
 
     DWORD res = WaitForSingleObject(hProc, timeout_ms);
     if (res == WAIT_OBJECT_0) {
         *out_died = true;
-        return REMEDY_OK;
+        return REVOKE_OK;
     } else if (res == WAIT_TIMEOUT) {
         *out_died = false;
-        return REMEDY_ERR_TIMEOUT;
+        return REVOKE_ERR_TIMEOUT;
     } else {
         *out_died = false;
-        return REMEDY_ERR_WAIT_FAILED;
+        return REVOKE_ERR_WAIT_FAILED;
     }
 }
 
-remedy_err_t worker_port_destroy(remedy_worker_token_t token) {
-    if (token == REMEDY_INVALID_WORKER_TOKEN) return REMEDY_ERR_INVALID_ARGUMENT;
+revoke_err_t worker_port_destroy(revoke_worker_token_t token) {
+    if (token == REVOKE_INVALID_WORKER_TOKEN) return REVOKE_ERR_INVALID_ARGUMENT;
 
     win32_worker_entry* entry = nullptr;
     {
         std::lock_guard<std::mutex> lock(g_worker_mutex);
         auto it = g_worker_table.find(token);
-        if (it == g_worker_table.end()) return REMEDY_ERR_INVALID_ARGUMENT;
+        if (it == g_worker_table.end()) return REVOKE_ERR_INVALID_ARGUMENT;
         entry = it->second;
 
         std::lock_guard<std::mutex> entry_lock(entry->entry_mutex);
 
         if (entry->state == worker_entry_state::CLOSING && entry->finalizer_active) {
-            return REMEDY_ERR_REVOKING;
+            return REVOKE_ERR_REVOKING;
         }
 
         if (entry->state != worker_entry_state::LIVE && entry->state != worker_entry_state::CLOSING) {
             std::abort();
         }
 
-        if (entry->job_handle != NULL) return REMEDY_ERR_INVALID_ARGUMENT;
+        if (entry->job_handle != NULL) return REVOKE_ERR_INVALID_ARGUMENT;
 
-        if (entry->process_handle == NULL) return REMEDY_ERR_INVALID_ARGUMENT;
+        if (entry->process_handle == NULL) return REVOKE_ERR_INVALID_ARGUMENT;
         DWORD waitRes = WaitForSingleObject(entry->process_handle, 0);
         if (waitRes == WAIT_TIMEOUT) {
-            return REMEDY_ERR_INVALID_ARGUMENT;
+            return REVOKE_ERR_INVALID_ARGUMENT;
         }
         if (waitRes == WAIT_FAILED) {
-            return REMEDY_ERR_WAIT_FAILED;
+            return REVOKE_ERR_WAIT_FAILED;
         }
         if (waitRes != WAIT_OBJECT_0) {
-            return REMEDY_ERR_WAIT_FAILED;
+            return REVOKE_ERR_WAIT_FAILED;
         }
 
         if (entry->state == worker_entry_state::LIVE) {
@@ -569,7 +569,7 @@ remedy_err_t worker_port_destroy(remedy_worker_token_t token) {
 
     std::unique_lock<std::mutex> entry_lock(entry->entry_mutex);
 
-#ifdef REMEDY_TEST_WORKER_RUNDOWN_SEAM
+#ifdef REVOKE_TEST_WORKER_RUNDOWN_SEAM
     if (entry->active_leases > 0) {
         std::lock_guard<std::mutex> seam_lock(g_seam_mutex);
         g_seam_finalizer_waiting_token = token;
@@ -586,14 +586,14 @@ remedy_err_t worker_port_destroy(remedy_worker_token_t token) {
         if (!drained) {
             entry->finalizer_active = false;
             entry->cv.notify_all();
-            return REMEDY_ERR_TIMEOUT;
+            return REVOKE_ERR_TIMEOUT;
         }
     }
 
     if (entry->thread_handle != NULL) {
         if (CloseHandle(entry->thread_handle)) {
             entry->thread_handle = NULL;
-#ifdef REMEDY_TEST_WORKER_RUNDOWN_SEAM
+#ifdef REVOKE_TEST_WORKER_RUNDOWN_SEAM
             {
                 std::lock_guard<std::mutex> seam_lock(g_seam_mutex);
                 g_seam_thread_closures++;
@@ -602,17 +602,17 @@ remedy_err_t worker_port_destroy(remedy_worker_token_t token) {
         } else {
             entry->finalizer_active = false;
             entry->cv.notify_all();
-            return REMEDY_ERR_CONTAINMENT_FAILED;
+            return REVOKE_ERR_CONTAINMENT_FAILED;
         }
     }
 
     if (entry->process_handle != NULL) {
         bool fail_proc_close = false;
-#ifdef REMEDY_TEST_WORKER_RUNDOWN_SEAM
+#ifdef REVOKE_TEST_WORKER_RUNDOWN_SEAM
         {
             std::lock_guard<std::mutex> seam_lock(g_seam_mutex);
             if (g_seam_fail_next_process_close_token == token) {
-                g_seam_fail_next_process_close_token = REMEDY_INVALID_WORKER_TOKEN;
+                g_seam_fail_next_process_close_token = REVOKE_INVALID_WORKER_TOKEN;
                 fail_proc_close = true;
             }
         }
@@ -620,10 +620,10 @@ remedy_err_t worker_port_destroy(remedy_worker_token_t token) {
         if (fail_proc_close || !CloseHandle(entry->process_handle)) {
             entry->finalizer_active = false;
             entry->cv.notify_all();
-            return REMEDY_ERR_CONTAINMENT_FAILED;
+            return REVOKE_ERR_CONTAINMENT_FAILED;
         } else {
             entry->process_handle = NULL;
-#ifdef REMEDY_TEST_WORKER_RUNDOWN_SEAM
+#ifdef REVOKE_TEST_WORKER_RUNDOWN_SEAM
             {
                 std::lock_guard<std::mutex> seam_lock(g_seam_mutex);
                 g_seam_process_closures++;
@@ -653,7 +653,7 @@ remedy_err_t worker_port_destroy(remedy_worker_token_t token) {
         g_worker_table.erase(it);
         entry->finalizer_active = false;
 
-#ifdef REMEDY_TEST_WORKER_RUNDOWN_SEAM
+#ifdef REVOKE_TEST_WORKER_RUNDOWN_SEAM
         {
             std::lock_guard<std::mutex> seam_lock(g_seam_mutex);
             g_seam_finalizer_completions++;
@@ -661,7 +661,7 @@ remedy_err_t worker_port_destroy(remedy_worker_token_t token) {
 #endif
     }
 
-#ifdef REMEDY_TEST_WORKER_RUNDOWN_SEAM
+#ifdef REVOKE_TEST_WORKER_RUNDOWN_SEAM
     {
         std::lock_guard<std::mutex> seam_lock(g_seam_mutex);
         g_seam_entry_deletions++;
@@ -669,69 +669,69 @@ remedy_err_t worker_port_destroy(remedy_worker_token_t token) {
 #endif
 
     delete entry;
-    return REMEDY_OK;
+    return REVOKE_OK;
 }
 
 } // extern "C"
 
-#ifdef REMEDY_TEST_WORKER_RUNDOWN_SEAM
+#ifdef REVOKE_TEST_WORKER_RUNDOWN_SEAM
 extern "C" {
 
-void remedy_test_reset_seam(void) {
+void revoke_test_reset_seam(void) {
     std::lock_guard<std::mutex> seam_lock(g_seam_mutex);
-    g_seam_armed_pause_token = REMEDY_INVALID_WORKER_TOKEN;
-    g_seam_paused_token = REMEDY_INVALID_WORKER_TOKEN;
+    g_seam_armed_pause_token = REVOKE_INVALID_WORKER_TOKEN;
+    g_seam_paused_token = REVOKE_INVALID_WORKER_TOKEN;
     g_seam_lease_paused = false;
     g_seam_lease_release = false;
-    g_seam_finalizer_waiting_token = REMEDY_INVALID_WORKER_TOKEN;
+    g_seam_finalizer_waiting_token = REVOKE_INVALID_WORKER_TOKEN;
     g_seam_finalizer_waiting = false;
-    g_seam_fail_next_process_close_token = REMEDY_INVALID_WORKER_TOKEN;
+    g_seam_fail_next_process_close_token = REVOKE_INVALID_WORKER_TOKEN;
     g_seam_finalizer_completions = 0;
     g_seam_entry_deletions = 0;
     g_seam_process_closures = 0;
     g_seam_thread_closures = 0;
 }
 
-void remedy_test_arm_lease_pause(remedy_worker_token_t token) {
+void revoke_test_arm_lease_pause(revoke_worker_token_t token) {
     std::lock_guard<std::mutex> seam_lock(g_seam_mutex);
     g_seam_armed_pause_token = token;
-    g_seam_paused_token = REMEDY_INVALID_WORKER_TOKEN;
+    g_seam_paused_token = REVOKE_INVALID_WORKER_TOKEN;
     g_seam_lease_paused = false;
     g_seam_lease_release = false;
 }
 
-bool remedy_test_wait_lease_paused(remedy_worker_token_t token, uint32_t timeout_ms) {
+bool revoke_test_wait_lease_paused(revoke_worker_token_t token, uint32_t timeout_ms) {
     std::unique_lock<std::mutex> seam_lock(g_seam_mutex);
     return g_seam_cv.wait_for(seam_lock, std::chrono::milliseconds(timeout_ms), [&] {
         return g_seam_lease_paused && (g_seam_paused_token == token);
     });
 }
 
-void remedy_test_release_lease_pause(void) {
+void revoke_test_release_lease_pause(void) {
     std::lock_guard<std::mutex> seam_lock(g_seam_mutex);
     g_seam_lease_release = true;
     g_seam_cv.notify_all();
 }
 
-void remedy_test_fail_next_process_handle_close(remedy_worker_token_t token) {
+void revoke_test_fail_next_process_handle_close(revoke_worker_token_t token) {
     std::lock_guard<std::mutex> seam_lock(g_seam_mutex);
     g_seam_fail_next_process_close_token = token;
 }
 
-bool remedy_test_wait_finalizer_waiting(remedy_worker_token_t token, uint32_t timeout_ms) {
+bool revoke_test_wait_finalizer_waiting(revoke_worker_token_t token, uint32_t timeout_ms) {
     std::unique_lock<std::mutex> seam_lock(g_seam_mutex);
     bool ok = g_seam_cv.wait_for(seam_lock, std::chrono::milliseconds(timeout_ms), [&] {
         return g_seam_finalizer_waiting && (g_seam_finalizer_waiting_token == token);
     });
     if (ok) {
         g_seam_finalizer_waiting = false;
-        g_seam_finalizer_waiting_token = REMEDY_INVALID_WORKER_TOKEN;
+        g_seam_finalizer_waiting_token = REVOKE_INVALID_WORKER_TOKEN;
     }
     return ok;
 }
 
-bool remedy_test_get_entry_snapshot(
-    remedy_worker_token_t token,
+bool revoke_test_get_entry_snapshot(
+    revoke_worker_token_t token,
     int* out_state,
     uint32_t* out_leases,
     bool* out_finalizer_active,
@@ -774,7 +774,7 @@ bool remedy_test_get_entry_snapshot(
     return true;
 }
 
-void remedy_test_get_final_counts(
+void revoke_test_get_final_counts(
     uint32_t* out_finalizer_completions,
     uint32_t* out_entry_deletions,
     uint32_t* out_process_closures,
@@ -800,11 +800,11 @@ void remedy_test_get_final_counts(
 } // extern "C"
 #endif
 
-#ifdef REMEDY_TEST_WORKER_TREE_SEAM
+#ifdef REVOKE_TEST_WORKER_TREE_SEAM
 extern "C" {
 
-bool remedy_test_worker_job_get_policy(
-    remedy_worker_token_t token,
+bool revoke_test_worker_job_get_policy(
+    revoke_worker_token_t token,
     uint32_t* out_limit_flags,
     uint32_t* out_active_processes
 ) {
@@ -836,8 +836,8 @@ bool remedy_test_worker_job_get_policy(
     return true;
 }
 
-bool remedy_test_worker_job_contains_pid(
-    remedy_worker_token_t token,
+bool revoke_test_worker_job_contains_pid(
+    revoke_worker_token_t token,
     uint32_t pid,
     bool* out_contains
 ) {

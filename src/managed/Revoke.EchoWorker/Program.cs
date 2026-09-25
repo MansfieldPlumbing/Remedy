@@ -5,20 +5,20 @@ using System.Text;
 using System.Diagnostics;
 using System.Threading;
 
-namespace Remedy.EchoWorker
+namespace Revoke.EchoWorker
 {
     public class Program
     {
-        private const uint REMEDY_WIRE_MAGIC = 0x52454D44; // "REMD"
-        private const ushort REMEDY_WIRE_VERSION = 1;
-        private const ushort REMEDY_WIRE_HEADER_SIZE = 36;
+        private const uint REVOKE_WIRE_MAGIC = 0x52454D44; // "REMD"
+        private const ushort REVOKE_WIRE_VERSION = 1;
+        private const ushort REVOKE_WIRE_HEADER_SIZE = 36;
 
-        private const ushort REMEDY_WIRE_KIND_REQUEST = 1;
-        private const ushort REMEDY_WIRE_KIND_COMPLETION = 2;
-        private const ushort REMEDY_WIRE_KIND_PING = 3;
-        private const ushort REMEDY_WIRE_KIND_PONG = 4;
-        private const ushort REMEDY_WIRE_KIND_QUIESCE = 5;
-        private const ushort REMEDY_WIRE_KIND_QUIESCE_ACK = 6;
+        private const ushort REVOKE_WIRE_KIND_REQUEST = 1;
+        private const ushort REVOKE_WIRE_KIND_COMPLETION = 2;
+        private const ushort REVOKE_WIRE_KIND_PING = 3;
+        private const ushort REVOKE_WIRE_KIND_PONG = 4;
+        private const ushort REVOKE_WIRE_KIND_QUIESCE = 5;
+        private const ushort REVOKE_WIRE_KIND_QUIESCE_ACK = 6;
 
         public static int Main(string[] args)
         {
@@ -33,7 +33,7 @@ namespace Remedy.EchoWorker
 
             if (string.IsNullOrEmpty(channelNonce)) return 1;
 
-            using var pipe = new NamedPipeClientStream(".", "remedy-worker-" + channelNonce, PipeDirection.InOut);
+            using var pipe = new NamedPipeClientStream(".", "revoke-worker-" + channelNonce, PipeDirection.InOut);
             pipe.Connect(3000);
 
             bool ignoreQuiesce = false;
@@ -54,7 +54,7 @@ namespace Remedy.EchoWorker
                     ulong domainHandle = BitConverter.ToUInt64(headerBuf, 24);
                     uint checksum = BitConverter.ToUInt32(headerBuf, 32);
 
-                    if (magic != REMEDY_WIRE_MAGIC || version != REMEDY_WIRE_VERSION || headerLen != 36)
+                    if (magic != REVOKE_WIRE_MAGIC || version != REVOKE_WIRE_VERSION || headerLen != 36)
                     {
                         break;
                     }
@@ -71,11 +71,11 @@ namespace Remedy.EchoWorker
 
                     string payloadStr = Encoding.UTF8.GetString(payload);
 
-                    if (kind == REMEDY_WIRE_KIND_PING)
+                    if (kind == REVOKE_WIRE_KIND_PING)
                     {
-                        WriteFrame(pipe, REMEDY_WIRE_KIND_PONG, requestId, domainHandle, null);
+                        WriteFrame(pipe, REVOKE_WIRE_KIND_PONG, requestId, domainHandle, null);
                     }
-                    else if (kind == REMEDY_WIRE_KIND_REQUEST)
+                    else if (kind == REVOKE_WIRE_KIND_REQUEST)
                     {
                         string replyStr = "echo_reply";
                         if (payloadStr.Contains("spawn_child"))
@@ -98,13 +98,13 @@ namespace Remedy.EchoWorker
                         }
 
                         byte[] replyBytes = Encoding.UTF8.GetBytes(replyStr);
-                        WriteFrame(pipe, REMEDY_WIRE_KIND_COMPLETION, requestId, domainHandle, replyBytes);
+                        WriteFrame(pipe, REVOKE_WIRE_KIND_COMPLETION, requestId, domainHandle, replyBytes);
                     }
-                    else if (kind == REMEDY_WIRE_KIND_QUIESCE)
+                    else if (kind == REVOKE_WIRE_KIND_QUIESCE)
                     {
                         if (!ignoreQuiesce)
                         {
-                            WriteFrame(pipe, REMEDY_WIRE_KIND_QUIESCE_ACK, requestId, domainHandle, null);
+                            WriteFrame(pipe, REVOKE_WIRE_KIND_QUIESCE_ACK, requestId, domainHandle, null);
                             break;
                         }
                     }
@@ -146,10 +146,10 @@ namespace Remedy.EchoWorker
             uint payloadLen = (uint)(payload?.Length ?? 0);
             uint checksum = payloadLen > 0 ? ComputeAdler32(payload!, payload!.Length) : 0;
 
-            BitConverter.GetBytes(REMEDY_WIRE_MAGIC).CopyTo(header, 0);
-            BitConverter.GetBytes(REMEDY_WIRE_VERSION).CopyTo(header, 4);
+            BitConverter.GetBytes(REVOKE_WIRE_MAGIC).CopyTo(header, 0);
+            BitConverter.GetBytes(REVOKE_WIRE_VERSION).CopyTo(header, 4);
             BitConverter.GetBytes(kind).CopyTo(header, 6);
-            BitConverter.GetBytes(REMEDY_WIRE_HEADER_SIZE).CopyTo(header, 8);
+            BitConverter.GetBytes(REVOKE_WIRE_HEADER_SIZE).CopyTo(header, 8);
             BitConverter.GetBytes((ushort)0).CopyTo(header, 10);
             BitConverter.GetBytes(payloadLen).CopyTo(header, 12);
             BitConverter.GetBytes(requestId).CopyTo(header, 16);

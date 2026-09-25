@@ -4,7 +4,7 @@
 Cross-platform native applications often fall into the trap of inventing broad `IPlatform` abstractions for everything (clocks, strings, filesystems, threads, databases), cluttering core logic.
 
 ## Decision
-Remedy divides platform dependencies strictly by mechanism, limited to exactly four initial ports:
+Revoke divides platform dependencies strictly by mechanism, limited to exactly four initial ports:
 1. **Worker Port**: Lifecycle and monitoring of managed worker processes.
 2. **Channel Port**: IPC transport for request envelopes and completions.
 3. **Arena Port**: Shared memory mapping and cross-process buffer sharing.

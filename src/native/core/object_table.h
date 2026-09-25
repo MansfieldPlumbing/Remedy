@@ -1,8 +1,8 @@
-#ifndef REMEDY_CORE_OBJECT_TABLE_H
-#define REMEDY_CORE_OBJECT_TABLE_H
+#ifndef REVOKE_CORE_OBJECT_TABLE_H
+#define REVOKE_CORE_OBJECT_TABLE_H
 
-#include "remedy/types.h"
-#include "remedy/handle.h"
+#include "revoke/types.h"
+#include "revoke/handle.h"
 
 #include <atomic>
 #include <mutex>
@@ -12,20 +12,20 @@
 #include <chrono>
 #include <cstdlib>
 
-namespace remedy {
+namespace revoke {
 
-using remedy_deleter_fn = void (*)(void* resource) noexcept;
+using revoke_deleter_fn = void (*)(void* resource) noexcept;
 
 class object_table;
 
 struct object_slot {
     uint32_t generation{1};
-    remedy_object_type_t type{REMEDY_OBJECT_NONE};
-    remedy_handle_t owner_domain{REMEDY_INVALID_HANDLE};
-    remedy_slot_state_t state{REMEDY_SLOT_FREE};
+    revoke_object_type_t type{REVOKE_OBJECT_NONE};
+    revoke_handle_t owner_domain{REVOKE_INVALID_HANDLE};
+    revoke_slot_state_t state{REVOKE_SLOT_FREE};
     uint32_t pin_count{0};
     void* resource_ptr{nullptr};
-    remedy_deleter_fn deleter{nullptr};
+    revoke_deleter_fn deleter{nullptr};
     bool rundown_active{false};
 
     mutable std::mutex slot_mutex;
@@ -94,54 +94,54 @@ public:
     object_table();
     ~object_table();
 
-    remedy_handle_t insert(remedy_object_type_t type, remedy_handle_t owner_domain, void* resource_ptr, remedy_deleter_fn deleter);
-    remedy_err_t remove(remedy_handle_t handle, uint32_t timeout_ms = 2000);
-    bool is_valid(remedy_handle_t handle, remedy_object_type_t expected_type = REMEDY_OBJECT_NONE) const;
+    revoke_handle_t insert(revoke_object_type_t type, revoke_handle_t owner_domain, void* resource_ptr, revoke_deleter_fn deleter);
+    revoke_err_t remove(revoke_handle_t handle, uint32_t timeout_ms = 2000);
+    bool is_valid(revoke_handle_t handle, revoke_object_type_t expected_type = REVOKE_OBJECT_NONE) const;
 
     template <typename T>
-    object_lease<T> acquire(remedy_handle_t handle, remedy_object_type_t expected_type = REMEDY_OBJECT_NONE, remedy_err_t* out_err = nullptr) {
-        uint32_t slot_idx = remedy_handle_slot(handle);
-        uint32_t gen = remedy_handle_generation(handle);
+    object_lease<T> acquire(revoke_handle_t handle, revoke_object_type_t expected_type = REVOKE_OBJECT_NONE, revoke_err_t* out_err = nullptr) {
+        uint32_t slot_idx = revoke_handle_slot(handle);
+        uint32_t gen = revoke_handle_generation(handle);
 
         object_slot* slot = get_slot(slot_idx);
         if (!slot) {
-            if (out_err) *out_err = REMEDY_ERR_HANDLE_STALE;
+            if (out_err) *out_err = REVOKE_ERR_HANDLE_STALE;
             return {};
         }
 
         std::lock_guard<std::mutex> lock(slot->slot_mutex);
 
-        // 1. Generation mismatch -> REMEDY_ERR_HANDLE_STALE
+        // 1. Generation mismatch -> REVOKE_ERR_HANDLE_STALE
         if (slot->generation != gen) {
-            if (out_err) *out_err = REMEDY_ERR_HANDLE_STALE;
+            if (out_err) *out_err = REVOKE_ERR_HANDLE_STALE;
             return {};
         }
 
-        // 2. State FREE or RETIRED -> REMEDY_ERR_HANDLE_STALE
-        if (slot->state == REMEDY_SLOT_FREE || slot->state == REMEDY_SLOT_RETIRED) {
-            if (out_err) *out_err = REMEDY_ERR_HANDLE_STALE;
+        // 2. State FREE or RETIRED -> REVOKE_ERR_HANDLE_STALE
+        if (slot->state == REVOKE_SLOT_FREE || slot->state == REVOKE_SLOT_RETIRED) {
+            if (out_err) *out_err = REVOKE_ERR_HANDLE_STALE;
             return {};
         }
 
-        // 3. State REVOKING -> REMEDY_ERR_REVOKING
-        if (slot->state == REMEDY_SLOT_REVOKING) {
-            if (out_err) *out_err = REMEDY_ERR_REVOKING;
+        // 3. State REVOKING -> REVOKE_ERR_REVOKING
+        if (slot->state == REVOKE_SLOT_REVOKING) {
+            if (out_err) *out_err = REVOKE_ERR_REVOKING;
             return {};
         }
 
-        // 4. Expected-type mismatch -> REMEDY_ERR_WRONG_TYPE
-        if (expected_type != REMEDY_OBJECT_NONE && slot->type != expected_type) {
-            if (out_err) *out_err = REMEDY_ERR_WRONG_TYPE;
+        // 4. Expected-type mismatch -> REVOKE_ERR_WRONG_TYPE
+        if (expected_type != REVOKE_OBJECT_NONE && slot->type != expected_type) {
+            if (out_err) *out_err = REVOKE_ERR_WRONG_TYPE;
             return {};
         }
 
-        // 5. State LIVE, generation valid, type valid, resource valid -> increment pin and return REMEDY_OK
-        if (slot->state != REMEDY_SLOT_LIVE || slot->resource_ptr == nullptr) {
+        // 5. State LIVE, generation valid, type valid, resource valid -> increment pin and return REVOKE_OK
+        if (slot->state != REVOKE_SLOT_LIVE || slot->resource_ptr == nullptr) {
             std::abort(); // Unconditional fail-fast on malformed internal state
         }
 
         slot->pin_count++;
-        if (out_err) *out_err = REMEDY_OK;
+        if (out_err) *out_err = REVOKE_OK;
         return object_lease<T>(slot, static_cast<T*>(slot->resource_ptr));
     }
 
@@ -157,6 +157,6 @@ private:
     uint32_t high_watermark_{1};
 };
 
-} // namespace remedy
+} // namespace revoke
 
-#endif // REMEDY_CORE_OBJECT_TABLE_H
+#endif // REVOKE_CORE_OBJECT_TABLE_H

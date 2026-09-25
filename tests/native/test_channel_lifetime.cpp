@@ -19,76 +19,76 @@
 #include <chrono>
 #include <string>
 
-#include "remedy/ports/channel_port.h"
-#include "remedy/wire_frame.h"
+#include "revoke/ports/channel_port.h"
+#include "revoke/wire_frame.h"
 
-#ifdef REMEDY_TEST_CHANNEL_LIFETIME_SEAM
-struct remedy_test_channel_operation_history {
+#ifdef REVOKE_TEST_CHANNEL_LIFETIME_SEAM
+struct revoke_test_channel_operation_history {
     bool found{false}; bool created{false}; bool io_submitted{false}; bool io_was_pending{false};
     bool public_call_completed{false}; bool kernel_completion_observed{false};
     bool detached_at_public_return{false}; bool detached_recovered{false};
     bool no_kernel_request_outstanding_at_public_return{true};
-    remedy_err_t final_public_result{REMEDY_OK}; DWORD final_completion_error{ERROR_SUCCESS};
+    revoke_err_t final_public_result{REVOKE_OK}; DWORD final_completion_error{ERROR_SUCCESS};
 };
 
 struct channel_finalizer_owner_observation {
-    remedy_channel_token_t token{REMEDY_INVALID_CHANNEL_TOKEN};
+    revoke_channel_token_t token{REVOKE_INVALID_CHANNEL_TOKEN};
     uint64_t generation_number{0};
     uint64_t owner_call_cookie{0};
     bool finalizer_active{false};
     bool draining{false};
     bool public_destroy_completed{false};
-    remedy_err_t finalizer_result{REMEDY_OK};
+    revoke_err_t finalizer_result{REVOKE_OK};
     bool entry_remains_registered{true};
 };
 
 extern "C" {
-    [[noreturn]] void remedy_test_catastrophic_harness_failure(
+    [[noreturn]] void revoke_test_catastrophic_harness_failure(
         const char* message);
-    bool remedy_test_channel_reset_seam(void);
-    bool remedy_test_channel_get_operation_history(remedy_channel_token_t token, uint32_t operation_kind, uint64_t instance_id, remedy_test_channel_operation_history* out_history);
-    bool remedy_test_channel_set_operation_call_cookie(uint64_t cookie);
-    bool remedy_test_channel_set_destroy_call_cookie(uint64_t cookie);
-    bool remedy_test_channel_take_last_created_operation_instance(uint64_t* out_instance_id);
-    bool remedy_test_channel_wait_operation_created(remedy_channel_token_t token, uint32_t operation_kind, uint64_t call_cookie, uint32_t timeout_ms, uint64_t* out_instance_id);
-    bool remedy_test_channel_wait_operation_pending(remedy_channel_token_t token, uint32_t operation_kind, uint64_t instance_id, uint32_t timeout_ms);
-    bool remedy_test_channel_arm_lease_pause(remedy_channel_token_t token);
-    bool remedy_test_channel_wait_lease_paused(remedy_channel_token_t token, uint32_t timeout_ms);
-    bool remedy_test_channel_release_lease_pause(void);
-    bool remedy_test_channel_arm_submission_pause(remedy_channel_token_t token, uint32_t operation_kind, uint64_t call_cookie);
-    bool remedy_test_channel_wait_submission_paused(remedy_channel_token_t token, uint32_t operation_kind, uint64_t call_cookie, uint32_t timeout_ms, uint64_t* out_instance_id);
-    bool remedy_test_channel_release_submission_pause(void);
-    bool remedy_test_channel_arm_finalizer_pause(remedy_channel_token_t token);
-    bool remedy_test_channel_wait_finalizer_paused(remedy_channel_token_t token, uint32_t timeout_ms);
-    bool remedy_test_channel_release_finalizer_pause(void);
-    bool remedy_test_channel_wait_finalizer_draining(remedy_channel_token_t token, uint32_t timeout_ms);
-    bool remedy_test_channel_arm_close_pause(remedy_channel_token_t token);
-    bool remedy_test_channel_wait_close_paused(remedy_channel_token_t token, uint32_t timeout_ms);
-    bool remedy_test_channel_release_close_pause(void);
-    bool remedy_test_channel_inject_pipe_creation_failure(DWORD sim_error);
-    bool remedy_test_channel_inject_pipe_close_failure(remedy_channel_token_t token);
-    bool remedy_test_channel_inject_event_close_failure(remedy_channel_token_t token, uint32_t operation_kind);
-    bool remedy_test_channel_inject_pipe_cancel_failure(remedy_channel_token_t token, DWORD simulated_error);
-    bool remedy_test_channel_inject_operation_cancel_failure(remedy_channel_token_t token, uint32_t operation_kind, DWORD simulated_error);
-    bool remedy_test_channel_inject_wait_failure(remedy_channel_token_t token, uint32_t operation_kind, DWORD simulated_error);
-    bool remedy_test_channel_get_finalizer_owner_observation(remedy_channel_token_t token, channel_finalizer_owner_observation* out_obs);
-    bool remedy_test_channel_publish_competitor_attached(remedy_channel_token_t token, uint64_t generation_number, uint64_t competitor_cookie);
-    bool remedy_test_channel_wait_competitor_attached(remedy_channel_token_t token, uint64_t generation_number, uint32_t timeout_ms, uint64_t* out_competitor_cookie);
-    bool remedy_test_channel_get_entry_snapshot(remedy_channel_token_t token, int* out_state, uint32_t* out_leases, uint32_t* out_close_pins, bool* out_finalizer_active, bool* out_in_registry, bool* out_is_pipe_null, uint32_t* out_retained_event_count);
-    bool remedy_test_channel_get_operation_snapshot(remedy_channel_token_t token, uint32_t operation_kind, uint64_t instance_id, int* out_state, bool* out_io_submitted, bool* out_io_pending, bool* out_completion_observed, bool* out_detached, bool* out_event_owned, size_t* out_owned_buffer_size);
-    bool remedy_test_channel_get_final_counts(uint32_t* out_active_registry_entries, uint32_t* out_active_public_leases, uint32_t* out_active_close_pins, uint32_t* out_retained_operation_records, uint32_t* out_submitted_pending_operations, uint32_t* out_detached_pending_operations, uint32_t* out_completed_retained_operations, uint32_t* out_operation_buffers_allocated, uint32_t* out_operation_buffers_freed, uint32_t* out_detached_operations_created, uint32_t* out_detached_operations_recovered, uint32_t* out_unconsumed_injections, uint32_t* out_armed_pause_count, uint32_t* out_pending_operation_count, uint32_t* out_finalizer_invocations, uint32_t* out_finalizer_completions, uint32_t* out_successful_finalizers, uint32_t* out_entry_deletions, uint32_t* out_pipe_closures, uint32_t* out_event_closures, uint32_t* out_pipe_close_failures_consumed, uint32_t* out_event_close_failures_consumed, uint32_t* out_pipe_cancel_failures_consumed, uint32_t* out_operation_cancel_failures_consumed, uint32_t* out_wait_failures_consumed);
-    bool remedy_test_channel_set_next_token(remedy_channel_token_t next_token, remedy_channel_token_t* out_previous);
+    bool revoke_test_channel_reset_seam(void);
+    bool revoke_test_channel_get_operation_history(revoke_channel_token_t token, uint32_t operation_kind, uint64_t instance_id, revoke_test_channel_operation_history* out_history);
+    bool revoke_test_channel_set_operation_call_cookie(uint64_t cookie);
+    bool revoke_test_channel_set_destroy_call_cookie(uint64_t cookie);
+    bool revoke_test_channel_take_last_created_operation_instance(uint64_t* out_instance_id);
+    bool revoke_test_channel_wait_operation_created(revoke_channel_token_t token, uint32_t operation_kind, uint64_t call_cookie, uint32_t timeout_ms, uint64_t* out_instance_id);
+    bool revoke_test_channel_wait_operation_pending(revoke_channel_token_t token, uint32_t operation_kind, uint64_t instance_id, uint32_t timeout_ms);
+    bool revoke_test_channel_arm_lease_pause(revoke_channel_token_t token);
+    bool revoke_test_channel_wait_lease_paused(revoke_channel_token_t token, uint32_t timeout_ms);
+    bool revoke_test_channel_release_lease_pause(void);
+    bool revoke_test_channel_arm_submission_pause(revoke_channel_token_t token, uint32_t operation_kind, uint64_t call_cookie);
+    bool revoke_test_channel_wait_submission_paused(revoke_channel_token_t token, uint32_t operation_kind, uint64_t call_cookie, uint32_t timeout_ms, uint64_t* out_instance_id);
+    bool revoke_test_channel_release_submission_pause(void);
+    bool revoke_test_channel_arm_finalizer_pause(revoke_channel_token_t token);
+    bool revoke_test_channel_wait_finalizer_paused(revoke_channel_token_t token, uint32_t timeout_ms);
+    bool revoke_test_channel_release_finalizer_pause(void);
+    bool revoke_test_channel_wait_finalizer_draining(revoke_channel_token_t token, uint32_t timeout_ms);
+    bool revoke_test_channel_arm_close_pause(revoke_channel_token_t token);
+    bool revoke_test_channel_wait_close_paused(revoke_channel_token_t token, uint32_t timeout_ms);
+    bool revoke_test_channel_release_close_pause(void);
+    bool revoke_test_channel_inject_pipe_creation_failure(DWORD sim_error);
+    bool revoke_test_channel_inject_pipe_close_failure(revoke_channel_token_t token);
+    bool revoke_test_channel_inject_event_close_failure(revoke_channel_token_t token, uint32_t operation_kind);
+    bool revoke_test_channel_inject_pipe_cancel_failure(revoke_channel_token_t token, DWORD simulated_error);
+    bool revoke_test_channel_inject_operation_cancel_failure(revoke_channel_token_t token, uint32_t operation_kind, DWORD simulated_error);
+    bool revoke_test_channel_inject_wait_failure(revoke_channel_token_t token, uint32_t operation_kind, DWORD simulated_error);
+    bool revoke_test_channel_get_finalizer_owner_observation(revoke_channel_token_t token, channel_finalizer_owner_observation* out_obs);
+    bool revoke_test_channel_publish_competitor_attached(revoke_channel_token_t token, uint64_t generation_number, uint64_t competitor_cookie);
+    bool revoke_test_channel_wait_competitor_attached(revoke_channel_token_t token, uint64_t generation_number, uint32_t timeout_ms, uint64_t* out_competitor_cookie);
+    bool revoke_test_channel_get_entry_snapshot(revoke_channel_token_t token, int* out_state, uint32_t* out_leases, uint32_t* out_close_pins, bool* out_finalizer_active, bool* out_in_registry, bool* out_is_pipe_null, uint32_t* out_retained_event_count);
+    bool revoke_test_channel_get_operation_snapshot(revoke_channel_token_t token, uint32_t operation_kind, uint64_t instance_id, int* out_state, bool* out_io_submitted, bool* out_io_pending, bool* out_completion_observed, bool* out_detached, bool* out_event_owned, size_t* out_owned_buffer_size);
+    bool revoke_test_channel_get_final_counts(uint32_t* out_active_registry_entries, uint32_t* out_active_public_leases, uint32_t* out_active_close_pins, uint32_t* out_retained_operation_records, uint32_t* out_submitted_pending_operations, uint32_t* out_detached_pending_operations, uint32_t* out_completed_retained_operations, uint32_t* out_operation_buffers_allocated, uint32_t* out_operation_buffers_freed, uint32_t* out_detached_operations_created, uint32_t* out_detached_operations_recovered, uint32_t* out_unconsumed_injections, uint32_t* out_armed_pause_count, uint32_t* out_pending_operation_count, uint32_t* out_finalizer_invocations, uint32_t* out_finalizer_completions, uint32_t* out_successful_finalizers, uint32_t* out_entry_deletions, uint32_t* out_pipe_closures, uint32_t* out_event_closures, uint32_t* out_pipe_close_failures_consumed, uint32_t* out_event_close_failures_consumed, uint32_t* out_pipe_cancel_failures_consumed, uint32_t* out_operation_cancel_failures_consumed, uint32_t* out_wait_failures_consumed);
+    bool revoke_test_channel_set_next_token(revoke_channel_token_t next_token, revoke_channel_token_t* out_previous);
 }
 #endif
 
 enum class test_thread_kind { CONNECT, READER, WRITER, CLOSE, DESTROY_A, DESTROY_B };
 
-static inline remedy_wire_frame_header_t make_test_header(uint32_t payload_len, uint32_t payload_checksum) {
-    remedy_wire_frame_header_t hdr{};
-    hdr.magic = REMEDY_WIRE_MAGIC;
-    hdr.version = REMEDY_WIRE_VERSION;
-    hdr.kind = REMEDY_WIRE_KIND_REQUEST;
-    hdr.header_len = REMEDY_WIRE_HEADER_SIZE;
+static inline revoke_wire_frame_header_t make_test_header(uint32_t payload_len, uint32_t payload_checksum) {
+    revoke_wire_frame_header_t hdr{};
+    hdr.magic = REVOKE_WIRE_MAGIC;
+    hdr.version = REVOKE_WIRE_VERSION;
+    hdr.kind = REVOKE_WIRE_KIND_REQUEST;
+    hdr.header_len = REVOKE_WIRE_HEADER_SIZE;
     hdr.reserved = 0;
     hdr.payload_len = payload_len;
     hdr.request_id = 100;
@@ -98,38 +98,38 @@ static inline remedy_wire_frame_header_t make_test_header(uint32_t payload_len, 
 }
 
 struct token_override_guard {
-    remedy_channel_token_t previous_token{REMEDY_INVALID_CHANNEL_TOKEN};
-    remedy_channel_token_t target_token{REMEDY_INVALID_CHANNEL_TOKEN};
+    revoke_channel_token_t previous_token{REVOKE_INVALID_CHANNEL_TOKEN};
+    revoke_channel_token_t target_token{REVOKE_INVALID_CHANNEL_TOKEN};
     struct test_channel_context_t* ctx{nullptr};
 
-    token_override_guard(remedy_channel_token_t override_val, struct test_channel_context_t& context)
+    token_override_guard(revoke_channel_token_t override_val, struct test_channel_context_t& context)
         : target_token(override_val), ctx(&context) {
-#ifdef REMEDY_TEST_CHANNEL_LIFETIME_SEAM
-        remedy_test_channel_set_next_token(target_token, &previous_token);
+#ifdef REVOKE_TEST_CHANNEL_LIFETIME_SEAM
+        revoke_test_channel_set_next_token(target_token, &previous_token);
 #endif
     }
     ~token_override_guard() {
-#ifdef REMEDY_TEST_CHANNEL_LIFETIME_SEAM
-        remedy_channel_token_t reported_prev = REMEDY_INVALID_CHANNEL_TOKEN;
-        remedy_test_channel_set_next_token(previous_token, &reported_prev);
+#ifdef REVOKE_TEST_CHANNEL_LIFETIME_SEAM
+        revoke_channel_token_t reported_prev = REVOKE_INVALID_CHANNEL_TOKEN;
+        revoke_test_channel_set_next_token(previous_token, &reported_prev);
 #endif
     }
 };
 
 struct test_channel_context_t {
     std::mutex thread_state_mutex; std::condition_variable thread_state_cv;
-    remedy_channel_token_t server_token{REMEDY_INVALID_CHANNEL_TOKEN};
-    remedy_channel_token_t client_token{REMEDY_INVALID_CHANNEL_TOKEN};
+    revoke_channel_token_t server_token{REVOKE_INVALID_CHANNEL_TOKEN};
+    revoke_channel_token_t client_token{REVOKE_INVALID_CHANNEL_TOKEN};
     bool server_created{false}; bool client_created{false};
     bool server_close_succeeded{false}; bool client_close_succeeded{false};
     bool server_destroy_succeeded{false}; bool client_destroy_succeeded{false};
 
-    remedy_channel_token_t connect_token{REMEDY_INVALID_CHANNEL_TOKEN};
-    remedy_channel_token_t connect_peer_token{REMEDY_INVALID_CHANNEL_TOKEN};
-    remedy_channel_token_t reader_token{REMEDY_INVALID_CHANNEL_TOKEN};
-    remedy_channel_token_t reader_peer_token{REMEDY_INVALID_CHANNEL_TOKEN};
-    remedy_channel_token_t writer_token{REMEDY_INVALID_CHANNEL_TOKEN};
-    remedy_channel_token_t writer_peer_token{REMEDY_INVALID_CHANNEL_TOKEN};
+    revoke_channel_token_t connect_token{REVOKE_INVALID_CHANNEL_TOKEN};
+    revoke_channel_token_t connect_peer_token{REVOKE_INVALID_CHANNEL_TOKEN};
+    revoke_channel_token_t reader_token{REVOKE_INVALID_CHANNEL_TOKEN};
+    revoke_channel_token_t reader_peer_token{REVOKE_INVALID_CHANNEL_TOKEN};
+    revoke_channel_token_t writer_token{REVOKE_INVALID_CHANNEL_TOKEN};
+    revoke_channel_token_t writer_peer_token{REVOKE_INVALID_CHANNEL_TOKEN};
 
     uint64_t destroy_a_cookie{101}; uint64_t destroy_b_cookie{102};
 
@@ -143,8 +143,8 @@ struct test_channel_context_t {
     bool destroy_a_public_call_completed{false}; bool destroy_b_public_call_completed{false};
 
     uint64_t connect_instance_id{0}; uint64_t reader_instance_id{0}; uint64_t writer_instance_id{0};
-    remedy_err_t connect_operation_result{REMEDY_OK}; remedy_err_t reader_operation_result{REMEDY_OK}; remedy_err_t writer_operation_result{REMEDY_OK}; remedy_err_t close_operation_result{REMEDY_OK};
-    remedy_err_t destroy_a_result{REMEDY_OK}; remedy_err_t destroy_b_result{REMEDY_OK};
+    revoke_err_t connect_operation_result{REVOKE_OK}; revoke_err_t reader_operation_result{REVOKE_OK}; revoke_err_t writer_operation_result{REVOKE_OK}; revoke_err_t close_operation_result{REVOKE_OK};
+    revoke_err_t destroy_a_result{REVOKE_OK}; revoke_err_t destroy_b_result{REVOKE_OK};
 
     std::thread connect_thread; std::thread reader_thread; std::thread writer_thread; std::thread close_thread;
     std::thread destroy_thread_a; std::thread destroy_thread_b;
@@ -161,22 +161,22 @@ struct test_channel_context_t {
     }
 
     bool create_and_connect_test_channel_pair(const char* channel_name, uint64_t connect_cookie) {
-        remedy_channel_config_t server_cfg{channel_name, true};
-        remedy_channel_config_t client_cfg{channel_name, false};
+        revoke_channel_config_t server_cfg{channel_name, true};
+        revoke_channel_config_t client_cfg{channel_name, false};
 
-        if (channel_port_create(&server_cfg, &server_token) != REMEDY_OK) {
+        if (channel_port_create(&server_cfg, &server_token) != REVOKE_OK) {
             record_primary("Server creation failed"); return false;
         }
         server_created = true;
 
-        if (channel_port_create(&client_cfg, &client_token) != REMEDY_OK) {
+        if (channel_port_create(&client_cfg, &client_token) != REVOKE_OK) {
             record_primary("Client creation failed; performing checked server cleanup");
             channel_port_close(server_token);
             if (!destroy_endpoint_with_documented_retries(server_token, destroy_a_cookie)) {
-                remedy_test_catastrophic_harness_failure(
+                revoke_test_catastrophic_harness_failure(
                     "Server cleanup failed after client creation failure");
             }
-            server_token = REMEDY_INVALID_CHANNEL_TOKEN; server_created = false;
+            server_token = REVOKE_INVALID_CHANNEL_TOKEN; server_created = false;
             return false;
         }
         client_created = true;
@@ -187,17 +187,17 @@ struct test_channel_context_t {
         if (!wait_for_thread_completion(test_thread_kind::CONNECT, 2000)) {
             record_primary("Connect thread failed to complete");
 
-            if (server_token != REMEDY_INVALID_CHANNEL_TOKEN) {
+            if (server_token != REVOKE_INVALID_CHANNEL_TOKEN) {
                 channel_port_close(server_token);
             }
-            if (client_token != REMEDY_INVALID_CHANNEL_TOKEN) {
+            if (client_token != REVOKE_INVALID_CHANNEL_TOKEN) {
                 channel_port_close(client_token);
             }
 
             if (!wait_for_thread_completion(
                     test_thread_kind::CONNECT,
                     6000)) {
-                remedy_test_catastrophic_harness_failure(
+                revoke_test_catastrophic_harness_failure(
                     "Connect thread did not complete after bounded cleanup unblock");
             }
 
@@ -211,53 +211,53 @@ struct test_channel_context_t {
         if (connect_thread.joinable()) connect_thread.join();
         connect_thread_joined = true;
 
-        if (connect_operation_result != REMEDY_OK) {
+        if (connect_operation_result != REVOKE_OK) {
             record_primary("Connect operation returned non-OK result"); return false;
         }
         return true;
     }
 
-    void run_connect_thread_wrapper(remedy_channel_token_t tok, uint32_t timeout_ms, uint64_t cookie) {
+    void run_connect_thread_wrapper(revoke_channel_token_t tok, uint32_t timeout_ms, uint64_t cookie) {
         { std::lock_guard<std::mutex> lock(thread_state_mutex); connect_thread_started = true; }
-        remedy_test_channel_set_operation_call_cookie(cookie);
-        remedy_err_t res = channel_port_connect(tok, timeout_ms);
+        revoke_test_channel_set_operation_call_cookie(cookie);
+        revoke_err_t res = channel_port_connect(tok, timeout_ms);
         uint64_t inst_id = 0;
-        bool instance_ok = remedy_test_channel_take_last_created_operation_instance(&inst_id);
-        remedy_test_channel_operation_history hist{}; bool hist_ok = false;
-#ifdef REMEDY_TEST_CHANNEL_LIFETIME_SEAM
-        if (instance_ok && inst_id != 0) hist_ok = remedy_test_channel_get_operation_history(tok, 1, inst_id, &hist);
+        bool instance_ok = revoke_test_channel_take_last_created_operation_instance(&inst_id);
+        revoke_test_channel_operation_history hist{}; bool hist_ok = false;
+#ifdef REVOKE_TEST_CHANNEL_LIFETIME_SEAM
+        if (instance_ok && inst_id != 0) hist_ok = revoke_test_channel_get_operation_history(tok, 1, inst_id, &hist);
 #endif
         publish_operation_completion_from_history(test_thread_kind::CONNECT, res, instance_ok, inst_id, hist_ok, hist);
     }
 
-    void run_reader_thread_wrapper(remedy_channel_token_t tok, remedy_wire_frame_header_t* out_h, void* buf, size_t len, uint64_t cookie) {
+    void run_reader_thread_wrapper(revoke_channel_token_t tok, revoke_wire_frame_header_t* out_h, void* buf, size_t len, uint64_t cookie) {
         { std::lock_guard<std::mutex> lock(thread_state_mutex); reader_thread_started = true; }
-        remedy_test_channel_set_operation_call_cookie(cookie);
-        remedy_err_t res = channel_port_read_frame(tok, out_h, buf, len);
+        revoke_test_channel_set_operation_call_cookie(cookie);
+        revoke_err_t res = channel_port_read_frame(tok, out_h, buf, len);
         uint64_t inst_id = 0;
-        bool instance_ok = remedy_test_channel_take_last_created_operation_instance(&inst_id);
-        remedy_test_channel_operation_history hist{}; bool hist_ok = false;
-#ifdef REMEDY_TEST_CHANNEL_LIFETIME_SEAM
-        if (instance_ok && inst_id != 0) hist_ok = remedy_test_channel_get_operation_history(tok, 2, inst_id, &hist);
+        bool instance_ok = revoke_test_channel_take_last_created_operation_instance(&inst_id);
+        revoke_test_channel_operation_history hist{}; bool hist_ok = false;
+#ifdef REVOKE_TEST_CHANNEL_LIFETIME_SEAM
+        if (instance_ok && inst_id != 0) hist_ok = revoke_test_channel_get_operation_history(tok, 2, inst_id, &hist);
 #endif
         publish_operation_completion_from_history(test_thread_kind::READER, res, instance_ok, inst_id, hist_ok, hist);
     }
 
-    void run_writer_thread_wrapper(remedy_channel_token_t tok, const remedy_wire_frame_header_t* h, const void* payload, uint64_t cookie) {
+    void run_writer_thread_wrapper(revoke_channel_token_t tok, const revoke_wire_frame_header_t* h, const void* payload, uint64_t cookie) {
         { std::lock_guard<std::mutex> lock(thread_state_mutex); writer_thread_started = true; }
-        remedy_test_channel_set_operation_call_cookie(cookie);
-        remedy_err_t res = channel_port_send_frame(tok, h, payload);
+        revoke_test_channel_set_operation_call_cookie(cookie);
+        revoke_err_t res = channel_port_send_frame(tok, h, payload);
         uint64_t inst_id = 0;
-        bool instance_ok = remedy_test_channel_take_last_created_operation_instance(&inst_id);
-        remedy_test_channel_operation_history hist{}; bool hist_ok = false;
-#ifdef REMEDY_TEST_CHANNEL_LIFETIME_SEAM
-        if (instance_ok && inst_id != 0) hist_ok = remedy_test_channel_get_operation_history(tok, 3, inst_id, &hist);
+        bool instance_ok = revoke_test_channel_take_last_created_operation_instance(&inst_id);
+        revoke_test_channel_operation_history hist{}; bool hist_ok = false;
+#ifdef REVOKE_TEST_CHANNEL_LIFETIME_SEAM
+        if (instance_ok && inst_id != 0) hist_ok = revoke_test_channel_get_operation_history(tok, 3, inst_id, &hist);
 #endif
         publish_operation_completion_from_history(test_thread_kind::WRITER, res, instance_ok, inst_id, hist_ok, hist);
     }
 
     void publish_operation_completion_from_history(
-        test_thread_kind kind, remedy_err_t local_res, bool instance_ok, uint64_t inst_id, bool hist_ok, const remedy_test_channel_operation_history& hist
+        test_thread_kind kind, revoke_err_t local_res, bool instance_ok, uint64_t inst_id, bool hist_ok, const revoke_test_channel_operation_history& hist
     ) {
         std::lock_guard<std::mutex> lock(thread_state_mutex);
 
@@ -310,23 +310,23 @@ struct test_channel_context_t {
         });
     }
 
-    bool destroy_endpoint_with_documented_retries(remedy_channel_token_t tok, uint64_t cookie);
+    bool destroy_endpoint_with_documented_retries(revoke_channel_token_t tok, uint64_t cookie);
 
     bool execute_cleanup() {
-#ifdef REMEDY_TEST_CHANNEL_LIFETIME_SEAM
-        remedy_test_channel_release_lease_pause();
-        remedy_test_channel_release_submission_pause();
-        remedy_test_channel_release_finalizer_pause();
-        remedy_test_channel_release_close_pause();
+#ifdef REVOKE_TEST_CHANNEL_LIFETIME_SEAM
+        revoke_test_channel_release_lease_pause();
+        revoke_test_channel_release_submission_pause();
+        revoke_test_channel_release_finalizer_pause();
+        revoke_test_channel_release_close_pause();
 #endif
-        if (server_token != REMEDY_INVALID_CHANNEL_TOKEN) channel_port_close(server_token);
-        if (client_token != REMEDY_INVALID_CHANNEL_TOKEN) channel_port_close(client_token);
+        if (server_token != REVOKE_INVALID_CHANNEL_TOKEN) channel_port_close(server_token);
+        if (client_token != REVOKE_INVALID_CHANNEL_TOKEN) channel_port_close(client_token);
 
         if (close_thread.joinable()) {
             if (!wait_for_thread_completion(
                     test_thread_kind::CLOSE,
                     2000)) {
-                remedy_test_catastrophic_harness_failure(
+                revoke_test_catastrophic_harness_failure(
                     "Close thread did not complete during bounded cleanup");
             }
 
@@ -338,7 +338,7 @@ struct test_channel_context_t {
             if (!wait_for_thread_completion(
                     test_thread_kind::CONNECT,
                     6000)) {
-                remedy_test_catastrophic_harness_failure(
+                revoke_test_catastrophic_harness_failure(
                     "Connect thread did not complete during bounded cleanup");
             }
 
@@ -350,7 +350,7 @@ struct test_channel_context_t {
             if (!wait_for_thread_completion(
                     test_thread_kind::READER,
                     11000)) {
-                remedy_test_catastrophic_harness_failure(
+                revoke_test_catastrophic_harness_failure(
                     "Reader thread did not complete during bounded cleanup");
             }
 
@@ -362,7 +362,7 @@ struct test_channel_context_t {
             if (!wait_for_thread_completion(
                     test_thread_kind::WRITER,
                     6000)) {
-                remedy_test_catastrophic_harness_failure(
+                revoke_test_catastrophic_harness_failure(
                     "Writer thread did not complete during bounded cleanup");
             }
 
@@ -370,10 +370,10 @@ struct test_channel_context_t {
             writer_thread_joined = true;
         }
 
-        if (server_token != REMEDY_INVALID_CHANNEL_TOKEN && !server_destroy_succeeded) {
+        if (server_token != REVOKE_INVALID_CHANNEL_TOKEN && !server_destroy_succeeded) {
             server_destroy_succeeded = destroy_endpoint_with_documented_retries(server_token, destroy_a_cookie);
         }
-        if (client_token != REMEDY_INVALID_CHANNEL_TOKEN && !client_destroy_succeeded) {
+        if (client_token != REVOKE_INVALID_CHANNEL_TOKEN && !client_destroy_succeeded) {
             client_destroy_succeeded = destroy_endpoint_with_documented_retries(client_token, destroy_a_cookie);
         }
 
@@ -381,17 +381,17 @@ struct test_channel_context_t {
     }
 };
 
-bool test_channel_context_t::destroy_endpoint_with_documented_retries(remedy_channel_token_t tok, uint64_t cookie) {
-    if (tok == REMEDY_INVALID_CHANNEL_TOKEN) return true;
+bool test_channel_context_t::destroy_endpoint_with_documented_retries(revoke_channel_token_t tok, uint64_t cookie) {
+    if (tok == REVOKE_INVALID_CHANNEL_TOKEN) return true;
     for (int attempt = 0; attempt < 3; ++attempt) {
-        remedy_test_channel_set_destroy_call_cookie(cookie);
-        remedy_err_t err = channel_port_destroy(tok);
-        if (err == REMEDY_OK) {
+        revoke_test_channel_set_destroy_call_cookie(cookie);
+        revoke_err_t err = channel_port_destroy(tok);
+        if (err == REVOKE_OK) {
             if (tok == server_token) server_destroy_succeeded = true;
             if (tok == client_token) client_destroy_succeeded = true;
             return true;
         }
-        if (err != REMEDY_ERR_IPC_FAILURE) break;
+        if (err != REVOKE_ERR_IPC_FAILURE) break;
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     return false;
@@ -399,7 +399,7 @@ bool test_channel_context_t::destroy_endpoint_with_documented_retries(remedy_cha
 
 void run_close_thread_wrapper(
     test_channel_context_t* ctx,
-    remedy_channel_token_t tok)
+    revoke_channel_token_t tok)
 {
     {
         std::lock_guard<std::mutex> lock(
@@ -407,7 +407,7 @@ void run_close_thread_wrapper(
         ctx->close_thread_started = true;
     }
 
-    remedy_err_t res = channel_port_close(tok);
+    revoke_err_t res = channel_port_close(tok);
 
     {
         std::lock_guard<std::mutex> lock(
@@ -418,10 +418,10 @@ void run_close_thread_wrapper(
     }
 }
 
-void run_destroy_thread_a_wrapper(test_channel_context_t* ctx, remedy_channel_token_t tok, uint64_t cookie) {
+void run_destroy_thread_a_wrapper(test_channel_context_t* ctx, revoke_channel_token_t tok, uint64_t cookie) {
     { std::lock_guard<std::mutex> lock(ctx->thread_state_mutex); ctx->destroy_thread_a_started = true; }
-    remedy_test_channel_set_destroy_call_cookie(cookie);
-    remedy_err_t res = channel_port_destroy(tok);
+    revoke_test_channel_set_destroy_call_cookie(cookie);
+    revoke_err_t res = channel_port_destroy(tok);
     {
         std::lock_guard<std::mutex> lock(ctx->thread_state_mutex);
         ctx->destroy_a_public_call_completed = true; ctx->destroy_a_result = res;
@@ -429,10 +429,10 @@ void run_destroy_thread_a_wrapper(test_channel_context_t* ctx, remedy_channel_to
     }
 }
 
-void run_destroy_thread_b_wrapper(test_channel_context_t* ctx, remedy_channel_token_t tok, uint64_t cookie) {
+void run_destroy_thread_b_wrapper(test_channel_context_t* ctx, revoke_channel_token_t tok, uint64_t cookie) {
     { std::lock_guard<std::mutex> lock(ctx->thread_state_mutex); ctx->destroy_thread_b_started = true; }
-    remedy_test_channel_set_destroy_call_cookie(cookie);
-    remedy_err_t res = channel_port_destroy(tok);
+    revoke_test_channel_set_destroy_call_cookie(cookie);
+    revoke_err_t res = channel_port_destroy(tok);
     {
         std::lock_guard<std::mutex> lock(ctx->thread_state_mutex);
         ctx->destroy_b_public_call_completed = true; ctx->destroy_b_result = res;
@@ -443,7 +443,7 @@ void run_destroy_thread_b_wrapper(test_channel_context_t* ctx, remedy_channel_to
 void test_normal_lifecycle(test_channel_context_t& ctx) {
     if (!ctx.create_and_connect_test_channel_pair("norm-pair", 1)) return;
     uint32_t tx_v = 0x12345678;
-    remedy_wire_frame_header_t tx_h = make_test_header(sizeof(tx_v), remedy_adler32(reinterpret_cast<const uint8_t*>(&tx_v), sizeof(tx_v)));
+    revoke_wire_frame_header_t tx_h = make_test_header(sizeof(tx_v), revoke_adler32(reinterpret_cast<const uint8_t*>(&tx_v), sizeof(tx_v)));
     tx_h.magic = 0;
     tx_h.version = 0;
     tx_h.header_len = 0;
@@ -451,7 +451,7 @@ void test_normal_lifecycle(test_channel_context_t& ctx) {
 
     ctx.writer_token = ctx.client_token;
     ctx.writer_thread = std::thread(&test_channel_context_t::run_writer_thread_wrapper, &ctx, ctx.client_token, &tx_h, &tx_v, 2);
-    remedy_wire_frame_header_t rx_h{}; uint32_t rx_v = 0;
+    revoke_wire_frame_header_t rx_h{}; uint32_t rx_v = 0;
     ctx.reader_token = ctx.server_token;
     ctx.reader_thread = std::thread(&test_channel_context_t::run_reader_thread_wrapper, &ctx, ctx.server_token, &rx_h, &rx_v, sizeof(rx_v), 3);
     if (!ctx.wait_for_thread_completion(test_thread_kind::WRITER, 1000)) {
@@ -460,12 +460,12 @@ void test_normal_lifecycle(test_channel_context_t& ctx) {
     if (!ctx.wait_for_thread_completion(test_thread_kind::READER, 1000)) {
         ctx.record_primary("Reader thread timed out");
     }
-    if (ctx.writer_operation_result != REMEDY_OK ||
-        ctx.reader_operation_result != REMEDY_OK ||
-        rx_h.magic != REMEDY_WIRE_MAGIC ||
-        rx_h.version != REMEDY_WIRE_VERSION ||
-        rx_h.header_len != REMEDY_WIRE_HEADER_SIZE ||
-        rx_h.checksum != remedy_adler32(reinterpret_cast<const uint8_t*>(&tx_v), sizeof(tx_v)) ||
+    if (ctx.writer_operation_result != REVOKE_OK ||
+        ctx.reader_operation_result != REVOKE_OK ||
+        rx_h.magic != REVOKE_WIRE_MAGIC ||
+        rx_h.version != REVOKE_WIRE_VERSION ||
+        rx_h.header_len != REVOKE_WIRE_HEADER_SIZE ||
+        rx_h.checksum != revoke_adler32(reinterpret_cast<const uint8_t*>(&tx_v), sizeof(tx_v)) ||
         rx_v != tx_v) {
         ctx.record_primary("Normal lifecycle assertions failed");
     }
@@ -473,22 +473,22 @@ void test_normal_lifecycle(test_channel_context_t& ctx) {
 }
 
 void test_stale_token_rejection(test_channel_context_t& ctx) {
-    remedy_channel_token_t stale_tok = 999999;
-    if (channel_port_connect(stale_tok, 100) != REMEDY_ERR_INVALID_ARGUMENT) ctx.record_primary("Stale connect failed");
-    if (channel_port_close(stale_tok) != REMEDY_ERR_INVALID_ARGUMENT) ctx.record_primary("Stale close failed");
-    if (channel_port_destroy(stale_tok) != REMEDY_ERR_INVALID_ARGUMENT) ctx.record_primary("Stale destroy failed");
+    revoke_channel_token_t stale_tok = 999999;
+    if (channel_port_connect(stale_tok, 100) != REVOKE_ERR_INVALID_ARGUMENT) ctx.record_primary("Stale connect failed");
+    if (channel_port_close(stale_tok) != REVOKE_ERR_INVALID_ARGUMENT) ctx.record_primary("Stale close failed");
+    if (channel_port_destroy(stale_tok) != REVOKE_ERR_INVALID_ARGUMENT) ctx.record_primary("Stale destroy failed");
     ctx.execute_cleanup();
 }
 
 void test_no_new_ops_after_closing(test_channel_context_t& ctx) {
-    remedy_channel_config_t cfg{"no-new-op", true};
-    if (channel_port_create(&cfg, &ctx.server_token) != REMEDY_OK) {
+    revoke_channel_config_t cfg{"no-new-op", true};
+    if (channel_port_create(&cfg, &ctx.server_token) != REVOKE_OK) {
         ctx.record_primary("Endpoint creation failed");
         return;
     }
     ctx.server_created = true;
     channel_port_close(ctx.server_token);
-    if (channel_port_connect(ctx.server_token, 100) != REMEDY_ERR_REVOKING) ctx.record_primary("Connect allowed after closing");
+    if (channel_port_connect(ctx.server_token, 100) != REVOKE_ERR_REVOKING) ctx.record_primary("Connect allowed after closing");
     ctx.execute_cleanup();
 }
 
@@ -498,10 +498,10 @@ void test_preexisting_lease_drains_before_destroy(
     constexpr uint64_t operation_cookie = 11;
     constexpr uint64_t destroy_cookie = 101;
 
-    remedy_channel_config_t cfg{"lease-drain", true};
+    revoke_channel_config_t cfg{"lease-drain", true};
     if (channel_port_create(
             &cfg,
-            &ctx.server_token) != REMEDY_OK) {
+            &ctx.server_token) != REVOKE_OK) {
         ctx.record_primary(
             "Lease-drain endpoint creation failed");
         return;
@@ -510,9 +510,9 @@ void test_preexisting_lease_drains_before_destroy(
     ctx.server_created = true;
     ctx.connect_token = ctx.server_token;
 
-    if (!remedy_test_channel_arm_lease_pause(
+    if (!revoke_test_channel_arm_lease_pause(
             ctx.server_token)) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Failed to arm lease-drain pause");
     }
 
@@ -523,10 +523,10 @@ void test_preexisting_lease_drains_before_destroy(
         5000,
         operation_cookie);
 
-    if (!remedy_test_channel_wait_lease_paused(
+    if (!revoke_test_channel_wait_lease_paused(
             ctx.server_token,
             1000)) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Operation did not pause while holding lease");
     }
 
@@ -538,7 +538,7 @@ void test_preexisting_lease_drains_before_destroy(
     bool pipe_null_before = false;
     uint32_t retained_before = 0;
 
-    if (!remedy_test_channel_get_entry_snapshot(
+    if (!revoke_test_channel_get_entry_snapshot(
             ctx.server_token,
             &state_before,
             &leases_before,
@@ -547,7 +547,7 @@ void test_preexisting_lease_drains_before_destroy(
             &in_registry_before,
             &pipe_null_before,
             &retained_before)) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Missing lease-drain entry snapshot");
     }
 
@@ -556,7 +556,7 @@ void test_preexisting_lease_drains_before_destroy(
         finalizer_before ||
         !in_registry_before ||
         pipe_null_before) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Lease-drain pre-destroy snapshot was invalid");
     }
 
@@ -566,36 +566,36 @@ void test_preexisting_lease_drains_before_destroy(
         ctx.server_token,
         destroy_cookie);
 
-    if (!remedy_test_channel_wait_finalizer_draining(
+    if (!revoke_test_channel_wait_finalizer_draining(
             ctx.server_token,
             1000)) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Destroy did not enter lease drainage");
     }
 
     if (ctx.wait_for_thread_completion(
             test_thread_kind::DESTROY_A,
             50)) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Destroy completed while preexisting lease was held");
     }
 
-    if (!remedy_test_channel_release_lease_pause()) {
-        remedy_test_catastrophic_harness_failure(
+    if (!revoke_test_channel_release_lease_pause()) {
+        revoke_test_catastrophic_harness_failure(
             "Failed to release lease-drain pause");
     }
 
     if (!ctx.wait_for_thread_completion(
             test_thread_kind::CONNECT,
             2000)) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Lease-holding operation did not complete after release");
     }
 
     if (!ctx.wait_for_thread_completion(
             test_thread_kind::DESTROY_A,
             2000)) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Destroy did not complete after lease drainage");
     }
 
@@ -610,12 +610,12 @@ void test_preexisting_lease_drains_before_destroy(
     }
 
     if (ctx.connect_operation_result !=
-            REMEDY_ERR_IPC_FAILURE) {
+            REVOKE_ERR_IPC_FAILURE) {
         ctx.record_primary(
             "Lease-holder did not observe rundown rejection");
     }
 
-    if (ctx.destroy_a_result != REMEDY_OK) {
+    if (ctx.destroy_a_result != REVOKE_OK) {
         ctx.record_primary(
             "Destroy failed after preexisting lease drained");
     } else {
@@ -627,13 +627,13 @@ void test_preexisting_lease_drains_before_destroy(
 
 void test_close_unblocks_pending_read(test_channel_context_t& ctx) {
     if (!ctx.create_and_connect_test_channel_pair("unblock-read", 1)) return;
-    remedy_wire_frame_header_t rx_h{}; uint32_t rx_v = 0; uint64_t r_cookie = 2; uint64_t r_inst = 0;
+    revoke_wire_frame_header_t rx_h{}; uint32_t rx_v = 0; uint64_t r_cookie = 2; uint64_t r_inst = 0;
     ctx.reader_thread = std::thread(&test_channel_context_t::run_reader_thread_wrapper, &ctx, ctx.server_token, &rx_h, &rx_v, sizeof(rx_v), r_cookie);
-    if (!remedy_test_channel_wait_operation_created(ctx.server_token, 2, r_cookie, 1000, &r_inst)) {
-        remedy_test_catastrophic_harness_failure("Reader operation not created");
+    if (!revoke_test_channel_wait_operation_created(ctx.server_token, 2, r_cookie, 1000, &r_inst)) {
+        revoke_test_catastrophic_harness_failure("Reader operation not created");
     }
-    if (!remedy_test_channel_wait_operation_pending(ctx.server_token, 2, r_inst, 1000)) {
-        remedy_test_catastrophic_harness_failure("Reader operation not pending");
+    if (!revoke_test_channel_wait_operation_pending(ctx.server_token, 2, r_inst, 1000)) {
+        revoke_test_catastrophic_harness_failure("Reader operation not pending");
     }
     channel_port_close(ctx.server_token);
     ctx.execute_cleanup();
@@ -644,10 +644,10 @@ void test_close_racing_with_destroy_seam(
 {
     constexpr uint64_t destroy_cookie = 101;
 
-    remedy_channel_config_t cfg{"close-race", true};
+    revoke_channel_config_t cfg{"close-race", true};
     if (channel_port_create(
             &cfg,
-            &ctx.server_token) != REMEDY_OK) {
+            &ctx.server_token) != REVOKE_OK) {
         ctx.record_primary(
             "Close-race endpoint creation failed");
         return;
@@ -655,9 +655,9 @@ void test_close_racing_with_destroy_seam(
 
     ctx.server_created = true;
 
-    if (!remedy_test_channel_arm_close_pause(
+    if (!revoke_test_channel_arm_close_pause(
             ctx.server_token)) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Failed to arm close-race pause");
     }
 
@@ -666,10 +666,10 @@ void test_close_racing_with_destroy_seam(
         &ctx,
         ctx.server_token);
 
-    if (!remedy_test_channel_wait_close_paused(
+    if (!revoke_test_channel_wait_close_paused(
             ctx.server_token,
             1000)) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Close worker did not reach close pause");
     }
 
@@ -681,7 +681,7 @@ void test_close_racing_with_destroy_seam(
     bool pipe_null_before = false;
     uint32_t retained_before = 0;
 
-    if (!remedy_test_channel_get_entry_snapshot(
+    if (!revoke_test_channel_get_entry_snapshot(
             ctx.server_token,
             &state_before,
             &leases_before,
@@ -690,7 +690,7 @@ void test_close_racing_with_destroy_seam(
             &in_registry_before,
             &pipe_null_before,
             &retained_before)) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Missing close-race paused snapshot");
     }
 
@@ -699,7 +699,7 @@ void test_close_racing_with_destroy_seam(
         finalizer_before ||
         !in_registry_before ||
         pipe_null_before) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Close-race paused snapshot was invalid");
     }
 
@@ -709,10 +709,10 @@ void test_close_racing_with_destroy_seam(
         ctx.server_token,
         destroy_cookie);
 
-    if (!remedy_test_channel_wait_finalizer_draining(
+    if (!revoke_test_channel_wait_finalizer_draining(
             ctx.server_token,
             1000)) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Destroy did not enter close-pin drainage");
     }
 
@@ -724,7 +724,7 @@ void test_close_racing_with_destroy_seam(
     bool pipe_null_during = false;
     uint32_t retained_during = 0;
 
-    if (!remedy_test_channel_get_entry_snapshot(
+    if (!revoke_test_channel_get_entry_snapshot(
             ctx.server_token,
             &state_during,
             &leases_during,
@@ -733,7 +733,7 @@ void test_close_racing_with_destroy_seam(
             &in_registry_during,
             &pipe_null_during,
             &retained_during)) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Missing close-race drainage snapshot");
     }
 
@@ -742,40 +742,40 @@ void test_close_racing_with_destroy_seam(
         !finalizer_during ||
         !in_registry_during ||
         pipe_null_during) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Destroy did not remain blocked by close pin");
     }
 
     if (ctx.wait_for_thread_completion(
             test_thread_kind::CLOSE,
             50)) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Close completed while close pause was armed");
     }
 
     if (ctx.wait_for_thread_completion(
             test_thread_kind::DESTROY_A,
             50)) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Destroy completed while close pin was held");
     }
 
-    if (!remedy_test_channel_release_close_pause()) {
-        remedy_test_catastrophic_harness_failure(
+    if (!revoke_test_channel_release_close_pause()) {
+        revoke_test_catastrophic_harness_failure(
             "Failed to release close-race pause");
     }
 
     if (!ctx.wait_for_thread_completion(
             test_thread_kind::CLOSE,
             2000)) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Close worker did not complete after release");
     }
 
     if (!ctx.wait_for_thread_completion(
             test_thread_kind::DESTROY_A,
             2000)) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Destroy did not complete after close-pin release");
     }
 
@@ -789,14 +789,14 @@ void test_close_racing_with_destroy_seam(
         ctx.destroy_thread_a_joined = true;
     }
 
-    if (ctx.close_operation_result != REMEDY_OK) {
+    if (ctx.close_operation_result != REVOKE_OK) {
         ctx.record_primary(
             "Concurrent close returned a non-OK result");
     } else {
         ctx.server_close_succeeded = true;
     }
 
-    if (ctx.destroy_a_result != REMEDY_OK) {
+    if (ctx.destroy_a_result != REVOKE_OK) {
         ctx.record_primary(
             "Destroy failed after close-pin drainage");
     } else {
@@ -812,18 +812,18 @@ void test_synchronized_concurrent_destroy(
     constexpr uint64_t owner_cookie = 101;
     constexpr uint64_t competitor_cookie = 102;
 
-    remedy_channel_config_t cfg{"sync-destroy", true};
+    revoke_channel_config_t cfg{"sync-destroy", true};
     if (channel_port_create(
             &cfg,
-            &ctx.server_token) != REMEDY_OK) {
+            &ctx.server_token) != REVOKE_OK) {
         ctx.record_primary(
             "Concurrent destroy endpoint creation failed");
         return;
     }
 
-    if (!remedy_test_channel_arm_finalizer_pause(
+    if (!revoke_test_channel_arm_finalizer_pause(
             ctx.server_token)) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Failed to arm concurrent destroy finalizer pause");
     }
 
@@ -833,18 +833,18 @@ void test_synchronized_concurrent_destroy(
         ctx.server_token,
         owner_cookie);
 
-    if (!remedy_test_channel_wait_finalizer_paused(
+    if (!revoke_test_channel_wait_finalizer_paused(
             ctx.server_token,
             1000)) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Destroy owner did not reach finalizer pause");
     }
 
     channel_finalizer_owner_observation owner_before{};
-    if (!remedy_test_channel_get_finalizer_owner_observation(
+    if (!revoke_test_channel_get_finalizer_owner_observation(
             ctx.server_token,
             &owner_before)) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Missing initial finalizer owner observation");
     }
 
@@ -854,9 +854,9 @@ void test_synchronized_concurrent_destroy(
         !owner_before.finalizer_active ||
         owner_before.draining ||
         owner_before.public_destroy_completed ||
-        owner_before.finalizer_result != REMEDY_OK ||
+        owner_before.finalizer_result != REVOKE_OK ||
         !owner_before.entry_remains_registered) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Invalid initial finalizer owner observation");
     }
 
@@ -867,50 +867,50 @@ void test_synchronized_concurrent_destroy(
         competitor_cookie);
 
     uint64_t observed_competitor_cookie = 0;
-    if (!remedy_test_channel_wait_competitor_attached(
+    if (!revoke_test_channel_wait_competitor_attached(
             ctx.server_token,
             owner_before.generation_number,
             1000,
             &observed_competitor_cookie)) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Destroy competitor did not attach to owner generation");
     }
 
     if (observed_competitor_cookie != competitor_cookie) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Wrong destroy competitor attached to generation");
     }
 
     if (ctx.wait_for_thread_completion(
             test_thread_kind::DESTROY_A,
             50)) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Destroy owner completed while finalizer was paused");
     }
 
     if (ctx.wait_for_thread_completion(
             test_thread_kind::DESTROY_B,
             50)) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Destroy competitor completed before owner generation");
     }
 
-    if (!remedy_test_channel_release_finalizer_pause()) {
-        remedy_test_catastrophic_harness_failure(
+    if (!revoke_test_channel_release_finalizer_pause()) {
+        revoke_test_catastrophic_harness_failure(
             "Failed to release concurrent destroy finalizer pause");
     }
 
     if (!ctx.wait_for_thread_completion(
             test_thread_kind::DESTROY_A,
             2000)) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Destroy owner did not complete after pause release");
     }
 
     if (!ctx.wait_for_thread_completion(
             test_thread_kind::DESTROY_B,
             2000)) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Destroy competitor did not receive generation result");
     }
 
@@ -924,8 +924,8 @@ void test_synchronized_concurrent_destroy(
         ctx.destroy_thread_b_joined = true;
     }
 
-    if (ctx.destroy_a_result != REMEDY_OK ||
-        ctx.destroy_b_result != REMEDY_OK) {
+    if (ctx.destroy_a_result != REVOKE_OK ||
+        ctx.destroy_b_result != REVOKE_OK) {
         ctx.record_primary(
             "Concurrent destroy calls did not share successful result");
     } else {
@@ -933,10 +933,10 @@ void test_synchronized_concurrent_destroy(
     }
 
     channel_finalizer_owner_observation owner_after{};
-    if (!remedy_test_channel_get_finalizer_owner_observation(
+    if (!revoke_test_channel_get_finalizer_owner_observation(
             ctx.server_token,
             &owner_after)) {
-        remedy_test_catastrophic_harness_failure(
+        revoke_test_catastrophic_harness_failure(
             "Missing completed finalizer owner observation");
     }
 
@@ -947,7 +947,7 @@ void test_synchronized_concurrent_destroy(
         owner_after.finalizer_active ||
         owner_after.draining ||
         !owner_after.public_destroy_completed ||
-        owner_after.finalizer_result != REMEDY_OK ||
+        owner_after.finalizer_result != REVOKE_OK ||
         owner_after.entry_remains_registered) {
         ctx.record_primary(
             "Completed finalizer generation observation was invalid");
@@ -958,13 +958,13 @@ void test_synchronized_concurrent_destroy(
 
 void test_peer_endpoint_destroyed_during_pending_read(test_channel_context_t& ctx) {
     if (!ctx.create_and_connect_test_channel_pair("peer-dest-read", 1)) return;
-    remedy_wire_frame_header_t rx_h{}; uint32_t rx_v = 0; uint64_t r_cookie = 2; uint64_t r_inst = 0;
+    revoke_wire_frame_header_t rx_h{}; uint32_t rx_v = 0; uint64_t r_cookie = 2; uint64_t r_inst = 0;
     ctx.reader_thread = std::thread(&test_channel_context_t::run_reader_thread_wrapper, &ctx, ctx.server_token, &rx_h, &rx_v, sizeof(rx_v), r_cookie);
-    if (!remedy_test_channel_wait_operation_created(ctx.server_token, 2, r_cookie, 1000, &r_inst)) {
-        remedy_test_catastrophic_harness_failure("Reader operation not created");
+    if (!revoke_test_channel_wait_operation_created(ctx.server_token, 2, r_cookie, 1000, &r_inst)) {
+        revoke_test_catastrophic_harness_failure("Reader operation not created");
     }
-    if (!remedy_test_channel_wait_operation_pending(ctx.server_token, 2, r_inst, 1000)) {
-        remedy_test_catastrophic_harness_failure("Reader operation not pending");
+    if (!revoke_test_channel_wait_operation_pending(ctx.server_token, 2, r_inst, 1000)) {
+        revoke_test_catastrophic_harness_failure("Reader operation not pending");
     }
     channel_port_close(ctx.client_token);
     if (!ctx.destroy_endpoint_with_documented_retries(ctx.client_token, 101)) {
@@ -974,8 +974,8 @@ void test_peer_endpoint_destroyed_during_pending_read(test_channel_context_t& ct
 }
 
 void test_close_followed_by_destroy(test_channel_context_t& ctx) {
-    remedy_channel_config_t cfg{"close-dest", true};
-    if (channel_port_create(&cfg, &ctx.server_token) != REMEDY_OK) {
+    revoke_channel_config_t cfg{"close-dest", true};
+    if (channel_port_create(&cfg, &ctx.server_token) != REVOKE_OK) {
         ctx.record_primary("Endpoint creation failed");
         return;
     }
@@ -989,30 +989,30 @@ void test_close_followed_by_destroy(test_channel_context_t& ctx) {
 
 void test_failed_partial_construction(test_channel_context_t& ctx) {
     uint32_t entries_before = 0, deleted_before = 0;
-    if (!remedy_test_channel_get_final_counts(&entries_before, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &deleted_before, NULL, NULL, NULL, NULL, NULL, NULL, NULL)) {
-        remedy_test_catastrophic_harness_failure("Failed to get initial counts");
+    if (!revoke_test_channel_get_final_counts(&entries_before, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &deleted_before, NULL, NULL, NULL, NULL, NULL, NULL, NULL)) {
+        revoke_test_catastrophic_harness_failure("Failed to get initial counts");
     }
 
-    if (!remedy_test_channel_inject_pipe_creation_failure(ERROR_OUTOFMEMORY)) {
-        remedy_test_catastrophic_harness_failure("Failed to inject pipe creation failure");
+    if (!revoke_test_channel_inject_pipe_creation_failure(ERROR_OUTOFMEMORY)) {
+        revoke_test_catastrophic_harness_failure("Failed to inject pipe creation failure");
     }
-    remedy_channel_config_t cfg{"part-create", true}; remedy_channel_token_t tok = 0;
-    remedy_err_t res = channel_port_create(&cfg, &tok);
+    revoke_channel_config_t cfg{"part-create", true}; revoke_channel_token_t tok = 0;
+    revoke_err_t res = channel_port_create(&cfg, &tok);
 
     uint32_t entries_after = 0, deleted_after = 0;
-    if (!remedy_test_channel_get_final_counts(&entries_after, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &deleted_after, NULL, NULL, NULL, NULL, NULL, NULL, NULL)) {
-        remedy_test_catastrophic_harness_failure("Failed to get post-injection counts");
+    if (!revoke_test_channel_get_final_counts(&entries_after, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &deleted_after, NULL, NULL, NULL, NULL, NULL, NULL, NULL)) {
+        revoke_test_catastrophic_harness_failure("Failed to get post-injection counts");
     }
 
-    if (res != REMEDY_ERR_IPC_FAILURE || tok != REMEDY_INVALID_CHANNEL_TOKEN || entries_after != entries_before || deleted_after != deleted_before + 1) {
+    if (res != REVOKE_ERR_IPC_FAILURE || tok != REVOKE_INVALID_CHANNEL_TOKEN || entries_after != entries_before || deleted_after != deleted_before + 1) {
         ctx.record_primary("Partial construction assertions failed");
     }
     ctx.execute_cleanup();
 }
 
 void test_token_wraparound_collision(test_channel_context_t& ctx) {
-    remedy_channel_config_t s_cfg1{"wrap-s1", true};
-    if (channel_port_create(&s_cfg1, &ctx.server_token) != REMEDY_OK) {
+    revoke_channel_config_t s_cfg1{"wrap-s1", true};
+    if (channel_port_create(&s_cfg1, &ctx.server_token) != REVOKE_OK) {
         ctx.record_primary("Server 1 creation failed in wraparound scenario");
         return;
     }
@@ -1020,41 +1020,41 @@ void test_token_wraparound_collision(test_channel_context_t& ctx) {
 
     {
         token_override_guard guard(ctx.server_token, ctx);
-        remedy_channel_config_t s_cfg2{"wrap-s2", true};
-        if (channel_port_create(&s_cfg2, &ctx.client_token) != REMEDY_OK) {
+        revoke_channel_config_t s_cfg2{"wrap-s2", true};
+        if (channel_port_create(&s_cfg2, &ctx.client_token) != REVOKE_OK) {
             ctx.record_primary("Server 2 creation failed in wraparound scenario");
             ctx.execute_cleanup();
             return;
         }
         ctx.client_created = true;
-        if (ctx.client_token == ctx.server_token || ctx.client_token == REMEDY_INVALID_CHANNEL_TOKEN) {
+        if (ctx.client_token == ctx.server_token || ctx.client_token == REVOKE_INVALID_CHANNEL_TOKEN) {
             ctx.record_primary("Collision resolution failed");
         }
     }
 
     {
-        remedy_channel_token_t max_tok = UINT64_MAX - 1;
+        revoke_channel_token_t max_tok = UINT64_MAX - 1;
         token_override_guard guard(max_tok, ctx);
-        remedy_channel_config_t wrap_cfg1{"wrap-t1", true}; remedy_channel_token_t tok1 = 0;
-        if (channel_port_create(&wrap_cfg1, &tok1) != REMEDY_OK) {
+        revoke_channel_config_t wrap_cfg1{"wrap-t1", true}; revoke_channel_token_t tok1 = 0;
+        if (channel_port_create(&wrap_cfg1, &tok1) != REVOKE_OK) {
             ctx.record_primary("Temp token 1 creation failed in wraparound scenario");
         }
-        remedy_channel_config_t wrap_cfg2{"wrap-t2", true}; remedy_channel_token_t tok2 = 0;
-        if (channel_port_create(&wrap_cfg2, &tok2) != REMEDY_OK) {
+        revoke_channel_config_t wrap_cfg2{"wrap-t2", true}; revoke_channel_token_t tok2 = 0;
+        if (channel_port_create(&wrap_cfg2, &tok2) != REVOKE_OK) {
             ctx.record_primary("Temp token 2 creation failed in wraparound scenario");
         }
 
-        if (tok1 != max_tok || tok2 == REMEDY_INVALID_CHANNEL_TOKEN || tok2 == 0) {
+        if (tok1 != max_tok || tok2 == REVOKE_INVALID_CHANNEL_TOKEN || tok2 == 0) {
             ctx.record_primary("Wraparound failed");
         }
 
-        if (tok1 != 0 && tok1 != REMEDY_INVALID_CHANNEL_TOKEN) {
+        if (tok1 != 0 && tok1 != REVOKE_INVALID_CHANNEL_TOKEN) {
             channel_port_close(tok1);
             if (!ctx.destroy_endpoint_with_documented_retries(tok1, 901)) {
                 ctx.record_primary("Temp token 1 destroy failed in wraparound scenario");
             }
         }
-        if (tok2 != 0 && tok2 != REMEDY_INVALID_CHANNEL_TOKEN) {
+        if (tok2 != 0 && tok2 != REVOKE_INVALID_CHANNEL_TOKEN) {
             channel_port_close(tok2);
             if (!ctx.destroy_endpoint_with_documented_retries(tok2, 902)) {
                 ctx.record_primary("Temp token 2 destroy failed in wraparound scenario");
@@ -1066,21 +1066,21 @@ void test_token_wraparound_collision(test_channel_context_t& ctx) {
 
 void test_event_close_failure_retries(test_channel_context_t& ctx) {
     if (!ctx.create_and_connect_test_channel_pair("evt-retry-pair", 1)) return;
-    remedy_wire_frame_header_t rx_h{}; uint32_t rx_v = 0; uint64_t r_cookie = 2; uint64_t r_inst = 0;
+    revoke_wire_frame_header_t rx_h{}; uint32_t rx_v = 0; uint64_t r_cookie = 2; uint64_t r_inst = 0;
     ctx.reader_thread = std::thread(&test_channel_context_t::run_reader_thread_wrapper, &ctx, ctx.server_token, &rx_h, &rx_v, sizeof(rx_v), r_cookie);
-    if (!remedy_test_channel_wait_operation_created(ctx.server_token, 2, r_cookie, 1000, &r_inst)) {
-        remedy_test_catastrophic_harness_failure("Reader operation not created");
+    if (!revoke_test_channel_wait_operation_created(ctx.server_token, 2, r_cookie, 1000, &r_inst)) {
+        revoke_test_catastrophic_harness_failure("Reader operation not created");
     }
-    if (!remedy_test_channel_wait_operation_pending(ctx.server_token, 2, r_inst, 1000)) {
-        remedy_test_catastrophic_harness_failure("Reader operation not pending");
+    if (!revoke_test_channel_wait_operation_pending(ctx.server_token, 2, r_inst, 1000)) {
+        revoke_test_catastrophic_harness_failure("Reader operation not pending");
     }
-    if (!remedy_test_channel_inject_event_close_failure(ctx.server_token, 2)) {
-        remedy_test_catastrophic_harness_failure("Failed to inject event close failure");
+    if (!revoke_test_channel_inject_event_close_failure(ctx.server_token, 2)) {
+        revoke_test_catastrophic_harness_failure("Failed to inject event close failure");
     }
     channel_port_close(ctx.server_token);
-    remedy_test_channel_set_destroy_call_cookie(101);
-    remedy_err_t first_err = channel_port_destroy(ctx.server_token);
-    if (first_err != REMEDY_ERR_IPC_FAILURE) ctx.record_primary("First destroy did not return REMEDY_ERR_IPC_FAILURE");
+    revoke_test_channel_set_destroy_call_cookie(101);
+    revoke_err_t first_err = channel_port_destroy(ctx.server_token);
+    if (first_err != REVOKE_ERR_IPC_FAILURE) ctx.record_primary("First destroy did not return REVOKE_ERR_IPC_FAILURE");
     if (!ctx.destroy_endpoint_with_documented_retries(ctx.server_token, 102)) {
         ctx.record_primary("Destroy retry failed");
     }
@@ -1089,21 +1089,21 @@ void test_event_close_failure_retries(test_channel_context_t& ctx) {
 
 void test_cancellation_failure_retains_entry(test_channel_context_t& ctx) {
     if (!ctx.create_and_connect_test_channel_pair("cnc-fail-pair", 1)) return;
-    remedy_wire_frame_header_t rx_h{}; uint32_t rx_v = 0; uint64_t r_cookie = 2; uint64_t r_inst = 0;
+    revoke_wire_frame_header_t rx_h{}; uint32_t rx_v = 0; uint64_t r_cookie = 2; uint64_t r_inst = 0;
     ctx.reader_thread = std::thread(&test_channel_context_t::run_reader_thread_wrapper, &ctx, ctx.server_token, &rx_h, &rx_v, sizeof(rx_v), r_cookie);
-    if (!remedy_test_channel_wait_operation_created(ctx.server_token, 2, r_cookie, 1000, &r_inst)) {
-        remedy_test_catastrophic_harness_failure("Reader operation not created");
+    if (!revoke_test_channel_wait_operation_created(ctx.server_token, 2, r_cookie, 1000, &r_inst)) {
+        revoke_test_catastrophic_harness_failure("Reader operation not created");
     }
-    if (!remedy_test_channel_wait_operation_pending(ctx.server_token, 2, r_inst, 1000)) {
-        remedy_test_catastrophic_harness_failure("Reader operation not pending");
+    if (!revoke_test_channel_wait_operation_pending(ctx.server_token, 2, r_inst, 1000)) {
+        revoke_test_catastrophic_harness_failure("Reader operation not pending");
     }
-    if (!remedy_test_channel_inject_operation_cancel_failure(ctx.server_token, 2, ERROR_GEN_FAILURE)) {
-        remedy_test_catastrophic_harness_failure("Failed to inject operation cancel failure");
+    if (!revoke_test_channel_inject_operation_cancel_failure(ctx.server_token, 2, ERROR_GEN_FAILURE)) {
+        revoke_test_catastrophic_harness_failure("Failed to inject operation cancel failure");
     }
     channel_port_close(ctx.server_token);
-    remedy_test_channel_set_destroy_call_cookie(101);
-    remedy_err_t first_err = channel_port_destroy(ctx.server_token);
-    if (first_err != REMEDY_ERR_IPC_FAILURE) ctx.record_primary("First destroy did not return REMEDY_ERR_IPC_FAILURE");
+    revoke_test_channel_set_destroy_call_cookie(101);
+    revoke_err_t first_err = channel_port_destroy(ctx.server_token);
+    if (first_err != REVOKE_ERR_IPC_FAILURE) ctx.record_primary("First destroy did not return REVOKE_ERR_IPC_FAILURE");
     if (!ctx.destroy_endpoint_with_documented_retries(ctx.server_token, 102)) {
         ctx.record_primary("Destroy retry failed");
     }
@@ -1111,14 +1111,14 @@ void test_cancellation_failure_retains_entry(test_channel_context_t& ctx) {
 }
 
 void test_failed_pipe_close_retains_entry(test_channel_context_t& ctx) {
-    remedy_channel_config_t cfg{"fail-pipe-cls", true};
-    if (channel_port_create(&cfg, &ctx.server_token) != REMEDY_OK) {
+    revoke_channel_config_t cfg{"fail-pipe-cls", true};
+    if (channel_port_create(&cfg, &ctx.server_token) != REVOKE_OK) {
         ctx.record_primary("Endpoint creation failed");
         return;
     }
     ctx.server_created = true;
-    if (!remedy_test_channel_inject_pipe_close_failure(ctx.server_token)) {
-        remedy_test_catastrophic_harness_failure("Failed to inject pipe close failure");
+    if (!revoke_test_channel_inject_pipe_close_failure(ctx.server_token)) {
+        revoke_test_catastrophic_harness_failure("Failed to inject pipe close failure");
     }
     channel_port_close(ctx.server_token);
     if (!ctx.destroy_endpoint_with_documented_retries(ctx.server_token, 101)) {
@@ -1129,16 +1129,16 @@ void test_failed_pipe_close_retains_entry(test_channel_context_t& ctx) {
 
 void test_operation_cancel_failure_detaches_safely(test_channel_context_t& ctx) {
     if (!ctx.create_and_connect_test_channel_pair("op-cnc-detach", 1)) return;
-    remedy_wire_frame_header_t rx_h{}; uint32_t rx_v = 0; uint64_t r_cookie = 2; uint64_t r_inst = 0;
+    revoke_wire_frame_header_t rx_h{}; uint32_t rx_v = 0; uint64_t r_cookie = 2; uint64_t r_inst = 0;
     ctx.reader_thread = std::thread(&test_channel_context_t::run_reader_thread_wrapper, &ctx, ctx.server_token, &rx_h, &rx_v, sizeof(rx_v), r_cookie);
-    if (!remedy_test_channel_wait_operation_created(ctx.server_token, 2, r_cookie, 1000, &r_inst)) {
-        remedy_test_catastrophic_harness_failure("Reader operation not created");
+    if (!revoke_test_channel_wait_operation_created(ctx.server_token, 2, r_cookie, 1000, &r_inst)) {
+        revoke_test_catastrophic_harness_failure("Reader operation not created");
     }
-    if (!remedy_test_channel_wait_operation_pending(ctx.server_token, 2, r_inst, 1000)) {
-        remedy_test_catastrophic_harness_failure("Reader operation not pending");
+    if (!revoke_test_channel_wait_operation_pending(ctx.server_token, 2, r_inst, 1000)) {
+        revoke_test_catastrophic_harness_failure("Reader operation not pending");
     }
-    if (!remedy_test_channel_inject_operation_cancel_failure(ctx.server_token, 2, ERROR_GEN_FAILURE)) {
-        remedy_test_catastrophic_harness_failure("Failed to inject operation cancel failure");
+    if (!revoke_test_channel_inject_operation_cancel_failure(ctx.server_token, 2, ERROR_GEN_FAILURE)) {
+        revoke_test_catastrophic_harness_failure("Failed to inject operation cancel failure");
     }
     channel_port_close(ctx.server_token);
     if (!ctx.destroy_endpoint_with_documented_retries(ctx.server_token, 102)) {
@@ -1148,16 +1148,16 @@ void test_operation_cancel_failure_detaches_safely(test_channel_context_t& ctx) 
 }
 
 void test_atomic_submission_admission_rejection(test_channel_context_t& ctx) {
-    remedy_channel_config_t cfg{"admit-rej", true};
-    if (channel_port_create(&cfg, &ctx.server_token) != REMEDY_OK) {
+    revoke_channel_config_t cfg{"admit-rej", true};
+    if (channel_port_create(&cfg, &ctx.server_token) != REVOKE_OK) {
         ctx.record_primary("Endpoint creation failed");
         return;
     }
     ctx.server_created = true;
     channel_port_close(ctx.server_token);
     uint32_t tx_v = 1;
-    remedy_wire_frame_header_t tx_h = make_test_header(sizeof(tx_v), remedy_adler32(reinterpret_cast<const uint8_t*>(&tx_v), sizeof(tx_v)));
-    if (channel_port_send_frame(ctx.server_token, &tx_h, &tx_v) != REMEDY_ERR_REVOKING) ctx.record_primary("Admission rejection failed");
+    revoke_wire_frame_header_t tx_h = make_test_header(sizeof(tx_v), revoke_adler32(reinterpret_cast<const uint8_t*>(&tx_v), sizeof(tx_v)));
+    if (channel_port_send_frame(ctx.server_token, &tx_h, &tx_v) != REVOKE_ERR_REVOKING) ctx.record_primary("Admission rejection failed");
     ctx.execute_cleanup();
 }
 
@@ -1170,11 +1170,11 @@ void test_handle_leak_verification(test_channel_context_t& ctx) {
     if (!ctx.destroy_endpoint_with_documented_retries(ctx.client_token, 102)) {
         ctx.record_primary("Client destroy failed during warmup");
     }
-    ctx.server_token = REMEDY_INVALID_CHANNEL_TOKEN; ctx.client_token = REMEDY_INVALID_CHANNEL_TOKEN;
+    ctx.server_token = REVOKE_INVALID_CHANNEL_TOKEN; ctx.client_token = REVOKE_INVALID_CHANNEL_TOKEN;
 
     DWORD baseline_handles = 0;
     if (!GetProcessHandleCount(GetCurrentProcess(), &baseline_handles)) {
-        remedy_test_catastrophic_harness_failure("GetProcessHandleCount baseline failed");
+        revoke_test_catastrophic_harness_failure("GetProcessHandleCount baseline failed");
     }
 
     for (int i = 0; i < 100; ++i) {
@@ -1182,9 +1182,9 @@ void test_handle_leak_verification(test_channel_context_t& ctx) {
         test_channel_context_t iter_ctx;
         if (iter_ctx.create_and_connect_test_channel_pair(s_name, 1000 + i)) {
             uint32_t tx_v = 0xAA000000 | i;
-            remedy_wire_frame_header_t tx_h = make_test_header(sizeof(tx_v), remedy_adler32(reinterpret_cast<const uint8_t*>(&tx_v), sizeof(tx_v)));
+            revoke_wire_frame_header_t tx_h = make_test_header(sizeof(tx_v), revoke_adler32(reinterpret_cast<const uint8_t*>(&tx_v), sizeof(tx_v)));
             iter_ctx.writer_thread = std::thread(&test_channel_context_t::run_writer_thread_wrapper, &iter_ctx, iter_ctx.client_token, &tx_h, &tx_v, 2000 + i);
-            remedy_wire_frame_header_t rx_h{}; uint32_t rx_v = 0;
+            revoke_wire_frame_header_t rx_h{}; uint32_t rx_v = 0;
             iter_ctx.reader_thread = std::thread(&test_channel_context_t::run_reader_thread_wrapper, &iter_ctx, iter_ctx.server_token, &rx_h, &rx_v, sizeof(rx_v), 3000 + i);
             if (!iter_ctx.wait_for_thread_completion(test_thread_kind::WRITER, 100)) {
                 ctx.record_primary("Handle leak iteration writer timed out");
@@ -1210,7 +1210,7 @@ void test_handle_leak_verification(test_channel_context_t& ctx) {
 
     DWORD final_handles = 0;
     if (!GetProcessHandleCount(GetCurrentProcess(), &final_handles)) {
-        remedy_test_catastrophic_harness_failure("GetProcessHandleCount final failed");
+        revoke_test_catastrophic_harness_failure("GetProcessHandleCount final failed");
     }
     if (final_handles != baseline_handles) ctx.record_primary("Handle leak detected across 100 iterations");
     ctx.execute_cleanup();
@@ -1218,7 +1218,7 @@ void test_handle_leak_verification(test_channel_context_t& ctx) {
 
 bool run_all_channel_lifetime_scenarios(void) {
     bool overall_pass = true;
-    if (!remedy_test_channel_reset_seam()) {
+    if (!revoke_test_channel_reset_seam()) {
         std::fprintf(stderr, "Failed to reset seam before suite!\n");
         return false;
     }
@@ -1260,7 +1260,7 @@ bool run_all_channel_lifetime_scenarios(void) {
     uint32_t evt_cls_fail = UINT32_MAX, pipe_canc_fail = UINT32_MAX, op_canc_fail = UINT32_MAX;
     uint32_t wait_fail = UINT32_MAX;
 
-    bool counts_ok = remedy_test_channel_get_final_counts(
+    bool counts_ok = revoke_test_channel_get_final_counts(
         &act_entries, &act_leases, &act_close_pins, &ret_records,
         &sub_pending, &det_pending, &comp_retained, &buf_alloc,
         &buf_freed, &det_created, &det_rec, &unconsumed_inj,
@@ -1271,7 +1271,7 @@ bool run_all_channel_lifetime_scenarios(void) {
     );
 
     if (!counts_ok) {
-        std::fprintf(stderr, "remedy_test_channel_get_final_counts returned false!\n");
+        std::fprintf(stderr, "revoke_test_channel_get_final_counts returned false!\n");
         overall_pass = false;
     }
 

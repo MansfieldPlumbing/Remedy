@@ -213,8 +213,8 @@ int main(int argc, char* argv[]) {
         if (flag == "--tree-grandchild" && argc >= 3) {
             std::string cwd_str = argv[2];
             fs::path cwd_path(cwd_str);
-            fs::path tmp_path = cwd_path / "remedy_grandchild.tmp";
-            fs::path ready_path = cwd_path / "remedy_grandchild.ready";
+            fs::path tmp_path = cwd_path / "revoke_grandchild.tmp";
+            fs::path ready_path = cwd_path / "revoke_grandchild.ready";
 
             HANDLE hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
             if (hEvent == NULL) return 99;
@@ -308,7 +308,7 @@ int main(int argc, char* argv[]) {
             if (hEvent == NULL) return 99;
 
             // Wait for grandchild readiness
-            fs::path gc_ready_path = cwd_path / "remedy_grandchild.ready";
+            fs::path gc_ready_path = cwd_path / "revoke_grandchild.ready";
             std::string wf_err;
             if (wait_for_file_steady(gc_ready_path, 5000, &wf_err) != wait_file_res::FOUND) {
                 DWORD cErr = 0;
@@ -317,8 +317,8 @@ int main(int argc, char* argv[]) {
             }
 
             if (breakaway_created == 0) {
-                fs::path manifest_tmp = cwd_path / "remedy_tree_manifest.tmp";
-                fs::path manifest_ready = cwd_path / "remedy_tree_manifest.ready";
+                fs::path manifest_tmp = cwd_path / "revoke_tree_manifest.tmp";
+                fs::path manifest_ready = cwd_path / "revoke_tree_manifest.ready";
 
                 char payload[1024] = { 0 };
                 int len = snprintf(payload, sizeof(payload),
@@ -347,8 +347,8 @@ int main(int argc, char* argv[]) {
                     return cOk ? 94 : 194;
                 }
             } else {
-                fs::path emer_tmp = cwd_path / "remedy_breakaway_emergency.tmp";
-                fs::path emer_ready = cwd_path / "remedy_breakaway_emergency.ready";
+                fs::path emer_tmp = cwd_path / "revoke_breakaway_emergency.tmp";
+                fs::path emer_ready = cwd_path / "revoke_breakaway_emergency.ready";
 
                 char payload[1024] = { 0 };
                 int len = snprintf(payload, sizeof(payload),
@@ -399,7 +399,7 @@ int main(int argc, char* argv[]) {
     }
 
     fs::path cwd_path(cwd);
-    fs::path mode_path = cwd_path / "remedy_fixture_tree_mode.tmp";
+    fs::path mode_path = cwd_path / "revoke_fixture_tree_mode.tmp";
 
     std::error_code mode_ec;
     bool mode_exists = fs::exists(mode_path, mode_ec);
@@ -410,7 +410,7 @@ int main(int argc, char* argv[]) {
     if (!mode_exists) {
         // Preserved exact default fixture behavior byte-for-byte
         wchar_t marker_path[1024] = { 0 };
-        if (_snwprintf(marker_path, 1024, L"%s\\remedy_fixture_marker.tmp", cwd) < 0) {
+        if (_snwprintf(marker_path, 1024, L"%s\\revoke_fixture_marker.tmp", cwd) < 0) {
             return 2;
         }
 
@@ -507,8 +507,8 @@ int main(int argc, char* argv[]) {
     }
 
     // Wait for child manifest or emergency manifest
-    fs::path normal_manifest = cwd_path / "remedy_tree_manifest.ready";
-    fs::path emergency_manifest = cwd_path / "remedy_breakaway_emergency.ready";
+    fs::path normal_manifest = cwd_path / "revoke_tree_manifest.ready";
+    fs::path emergency_manifest = cwd_path / "revoke_breakaway_emergency.ready";
 
     auto start = std::chrono::steady_clock::now();
     while (std::chrono::steady_clock::now() - start < std::chrono::milliseconds(5000)) {
@@ -536,7 +536,7 @@ int main(int argc, char* argv[]) {
         return run_fixture_hold_wait(99);
     }
     else if (mode_str == "ROOT_EXIT_EARLY") {
-        fs::path release_marker = cwd_path / "remedy_root_exit.release";
+        fs::path release_marker = cwd_path / "revoke_root_exit.release";
         std::string wf_err;
         if (wait_for_file_steady(release_marker, 5000, &wf_err) != wait_file_res::FOUND) {
             return run_fixture_hold_wait(99);

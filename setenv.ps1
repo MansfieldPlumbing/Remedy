@@ -1,4 +1,4 @@
-# Remedy Build Environment Helper Script
+# Revoke Build Environment Helper Script
 # Usage: . .\setenv.ps1
 
 $pathsToAdd = @(
@@ -18,4 +18,4 @@ foreach ($p in $pathsToAdd) {
 $env:INCLUDE = "S:\bin\msvc\include;S:\bin\Windows Kits\10\Include\10.0.26100.0\ucrt;S:\bin\Windows Kits\10\Include\10.0.26100.0\um;S:\bin\Windows Kits\10\Include\10.0.26100.0\shared;S:\bin\Windows Kits\10\Include\10.0.26100.0\winrt"
 $env:LIB = "S:\bin\msvc\lib\x64;S:\bin\Windows Kits\10\Lib\10.0.26100.0\ucrt\x64;S:\bin\Windows Kits\10\Lib\10.0.26100.0\um\x64"
 
-Write-Host "[Remedy Environment] MSVC, Windows Kits, platform-tools, and nuget paths configured." -ForegroundColor Green
+Write-Host "[Revoke Environment] MSVC, Windows Kits, platform-tools, and nuget paths configured." -ForegroundColor Green

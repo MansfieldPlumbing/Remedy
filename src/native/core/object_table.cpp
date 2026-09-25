@@ -1,6 +1,6 @@
 #include "object_table.h"
 
-namespace remedy {
+namespace revoke {
 
 object_table::object_table() {
     ensure_capacity(CHUNK_SIZE - 1);
@@ -27,14 +27,14 @@ object_table::~object_table() {
         }
 
         // LIVE or REVOKING slots must contain valid pairs
-        if (slot->state == REMEDY_SLOT_LIVE || slot->state == REMEDY_SLOT_REVOKING) {
+        if (slot->state == REVOKE_SLOT_LIVE || slot->state == REVOKE_SLOT_REVOKING) {
             if (slot->resource_ptr == nullptr || slot->deleter == nullptr) {
                 std::abort();
             }
         }
 
         // FREE and RETIRED slots must contain neither
-        if (slot->state == REMEDY_SLOT_FREE || slot->state == REMEDY_SLOT_RETIRED) {
+        if (slot->state == REVOKE_SLOT_FREE || slot->state == REVOKE_SLOT_RETIRED) {
             if (slot->resource_ptr != nullptr || slot->deleter != nullptr) {
                 std::abort();
             }
@@ -44,7 +44,7 @@ object_table::~object_table() {
     // Pass 2: Collection pass
     struct pending_destruction {
         void* res{nullptr};
-        remedy_deleter_fn del{nullptr};
+        revoke_deleter_fn del{nullptr};
     };
     std::vector<pending_destruction> to_destroy;
 
@@ -57,7 +57,7 @@ object_table::~object_table() {
             to_destroy.push_back({slot->resource_ptr, slot->deleter});
             slot->resource_ptr = nullptr;
             slot->deleter = nullptr;
-            slot->state = REMEDY_SLOT_RETIRED;
+            slot->state = REVOKE_SLOT_RETIRED;
         }
     }
 
@@ -102,9 +102,9 @@ void object_table::ensure_capacity(uint32_t slot_idx) {
     }
 }
 
-remedy_handle_t object_table::insert(remedy_object_type_t type, remedy_handle_t owner_domain, void* resource_ptr, remedy_deleter_fn deleter) {
+revoke_handle_t object_table::insert(revoke_object_type_t type, revoke_handle_t owner_domain, void* resource_ptr, revoke_deleter_fn deleter) {
     if (!resource_ptr || !deleter) {
-        return REMEDY_INVALID_HANDLE;
+        return REVOKE_INVALID_HANDLE;
     }
 
     std::lock_guard<std::mutex> lock(mutex_);
@@ -126,7 +126,7 @@ remedy_handle_t object_table::insert(remedy_object_type_t type, remedy_handle_t 
     std::lock_guard<std::mutex> slot_lock(slot->slot_mutex);
 
     if (popped_from_free) {
-        if (slot->state != REMEDY_SLOT_FREE ||
+        if (slot->state != REVOKE_SLOT_FREE ||
             slot->rundown_active ||
             slot->pin_count != 0 ||
             slot->resource_ptr != nullptr ||
@@ -145,32 +145,32 @@ remedy_handle_t object_table::insert(remedy_object_type_t type, remedy_handle_t 
     slot->deleter = deleter;
     slot->pin_count = 0;
     slot->rundown_active = false;
-    slot->state = REMEDY_SLOT_LIVE;
+    slot->state = REVOKE_SLOT_LIVE;
 
-    return remedy_handle_make(slot->generation, slot_idx);
+    return revoke_handle_make(slot->generation, slot_idx);
 }
 
-remedy_err_t object_table::remove(remedy_handle_t handle, uint32_t timeout_ms) {
-    uint32_t slot_idx = remedy_handle_slot(handle);
-    uint32_t gen = remedy_handle_generation(handle);
+revoke_err_t object_table::remove(revoke_handle_t handle, uint32_t timeout_ms) {
+    uint32_t slot_idx = revoke_handle_slot(handle);
+    uint32_t gen = revoke_handle_generation(handle);
 
     object_slot* slot = get_slot(slot_idx);
-    if (!slot) return REMEDY_ERR_HANDLE_STALE;
+    if (!slot) return REVOKE_ERR_HANDLE_STALE;
 
     std::unique_lock<std::mutex> slot_lock(slot->slot_mutex);
 
-    // 1. Generation mismatch, FREE, or RETIRED -> REMEDY_ERR_HANDLE_STALE
-    if (slot->generation != gen || slot->state == REMEDY_SLOT_FREE || slot->state == REMEDY_SLOT_RETIRED) {
-        return REMEDY_ERR_HANDLE_STALE;
+    // 1. Generation mismatch, FREE, or RETIRED -> REVOKE_ERR_HANDLE_STALE
+    if (slot->generation != gen || slot->state == REVOKE_SLOT_FREE || slot->state == REVOKE_SLOT_RETIRED) {
+        return REVOKE_ERR_HANDLE_STALE;
     }
 
     // 2. LIVE state -> transition to REVOKING, claim rundown_active
-    if (slot->state == REMEDY_SLOT_LIVE) {
-        slot->state = REMEDY_SLOT_REVOKING;
+    if (slot->state == REVOKE_SLOT_LIVE) {
+        slot->state = REVOKE_SLOT_REVOKING;
         slot->rundown_active = true;
-    } else if (slot->state == REMEDY_SLOT_REVOKING) {
+    } else if (slot->state == REVOKE_SLOT_REVOKING) {
         if (slot->rundown_active) {
-            return REMEDY_ERR_REVOKING; // Another active finalizer running
+            return REVOKE_ERR_REVOKING; // Another active finalizer running
         }
         slot->rundown_active = true; // Claim finalizer ownership for retry
     }
@@ -190,12 +190,12 @@ remedy_err_t object_table::remove(remedy_handle_t handle, uint32_t timeout_ms) {
     // 4. On timeout -> rollback rundown_active, leave REVOKING state and resource intact
     if (!pins_drained) {
         slot->rundown_active = false;
-        return REMEDY_ERR_TIMEOUT;
+        return REVOKE_ERR_TIMEOUT;
     }
 
     // 5. Successful finalization (pins_drained == true)
     void* res = slot->resource_ptr;
-    remedy_deleter_fn del = slot->deleter;
+    revoke_deleter_fn del = slot->deleter;
 
     slot->resource_ptr = nullptr;
     slot->deleter = nullptr;
@@ -212,26 +212,26 @@ remedy_err_t object_table::remove(remedy_handle_t handle, uint32_t timeout_ms) {
     std::lock_guard<std::mutex> table_lock(mutex_);
     std::lock_guard<std::mutex> slot_relock(slot->slot_mutex);
 
-    slot->state = REMEDY_SLOT_RETIRED;
+    slot->state = REVOKE_SLOT_RETIRED;
 
     uint32_t next_gen = slot->generation + 1;
     if (next_gen == 0) next_gen = 1;
     slot->generation = next_gen;
 
-    slot->type = REMEDY_OBJECT_NONE;
-    slot->owner_domain = REMEDY_INVALID_HANDLE;
+    slot->type = REVOKE_OBJECT_NONE;
+    slot->owner_domain = REVOKE_INVALID_HANDLE;
 
-    slot->state = REMEDY_SLOT_FREE;
+    slot->state = REVOKE_SLOT_FREE;
     free_list_.push_back(slot_idx);
 
     slot->rundown_active = false;
 
-    return REMEDY_OK;
+    return REVOKE_OK;
 }
 
-bool object_table::is_valid(remedy_handle_t handle, remedy_object_type_t expected_type) const {
-    uint32_t slot_idx = remedy_handle_slot(handle);
-    uint32_t gen = remedy_handle_generation(handle);
+bool object_table::is_valid(revoke_handle_t handle, revoke_object_type_t expected_type) const {
+    uint32_t slot_idx = revoke_handle_slot(handle);
+    uint32_t gen = revoke_handle_generation(handle);
 
     object_slot* slot = get_slot(slot_idx);
     if (!slot) return false;
@@ -239,8 +239,8 @@ bool object_table::is_valid(remedy_handle_t handle, remedy_object_type_t expecte
     std::lock_guard<std::mutex> lock(slot->slot_mutex);
 
     if (slot->generation != gen) return false;
-    if (slot->state != REMEDY_SLOT_LIVE) return false;
-    if (expected_type != REMEDY_OBJECT_NONE && slot->type != expected_type) return false;
+    if (slot->state != REVOKE_SLOT_LIVE) return false;
+    if (expected_type != REVOKE_OBJECT_NONE && slot->type != expected_type) return false;
 
     return true;
 }
@@ -252,7 +252,7 @@ uint32_t object_table::live_count() const {
         object_slot* slot = get_slot(i);
         if (slot) {
             std::lock_guard<std::mutex> slot_lock(slot->slot_mutex);
-            if (slot->state == REMEDY_SLOT_LIVE) {
+            if (slot->state == REVOKE_SLOT_LIVE) {
                 count++;
             }
         }
@@ -260,4 +260,4 @@ uint32_t object_table::live_count() const {
     return count;
 }
 
-} // namespace remedy
+} // namespace revoke

@@ -1,6 +1,6 @@
-# Remedy Build Documentation
+# Revoke Build Documentation
 
-This document describes the canonical local build system for the Remedy project.
+This document describes the canonical local build system for the Revoke project.
 
 ## Prerequisites & Project Language Standard
 
@@ -21,7 +21,7 @@ When an initialized Visual Studio Developer PowerShell or Developer Command Prom
 - It does not inspect, prepend, rewrite, or normalize host environment variables.
 - It does not activate any `S:\bin` fallback paths.
 
-### Mode B — Local Remedy Workstation Fallback
+### Mode B — Local Revoke Workstation Fallback
 
 When no active MSVC developer environment is detected (i.e. `cl`, `INCLUDE`, and `LIB` are completely absent):
 - `build.ps1` activates the complete, coherent `S:\bin` workstation toolchain strictly within process scope.
@@ -42,7 +42,7 @@ If `cl`, `INCLUDE`, or `LIB` are partially initialized (for example, `cl` is pre
 
 ### Static MSVC C Runtime Selection
 
-Native C++ targets in Remedy configure CMake policy `CMP0091` to `NEW` and explicitly set `CMAKE_MSVC_RUNTIME_LIBRARY`:
+Native C++ targets in Revoke configure CMake policy `CMP0091` to `NEW` and explicitly set `CMAKE_MSVC_RUNTIME_LIBRARY`:
 
 ```cmake
 cmake_policy(SET CMP0091 NEW)
@@ -55,7 +55,7 @@ This ensures native executables link statically against the MSVC C runtime libra
 
 ### Scoped Dependency Verification
 
-For the currently admitted native targets (`remedy_echo_worker` and `test_codec_golden`), static MSVC CRT linkage eliminates external debug runtime DLL dependencies (`MSVCP140D.dll`, `VCRUNTIME140D.dll`, `VCRUNTIME140_1D.dll`, `ucrtbased.dll`).
+For the currently admitted native targets (`revoke_echo_worker` and `test_codec_golden`), static MSVC CRT linkage eliminates external debug runtime DLL dependencies (`MSVCP140D.dll`, `VCRUNTIME140D.dll`, `VCRUNTIME140_1D.dll`, `ucrtbased.dll`).
 
 For these currently admitted native echo-worker and codec-test targets, built executables depend only on standard OS system libraries (`KERNEL32.dll`). Deferred components and future executable targets have not yet been dependency-audited.
 
@@ -84,19 +84,19 @@ To perform a clean build and run all active native tests, execute the canonical 
 
 ### Compiled CMake Targets
 
-- `remedy_echo_worker` (`src/host/win32/remedy_echo_worker.cpp`) - Executable host process.
+- `revoke_echo_worker` (`src/host/win32/revoke_echo_worker.cpp`) - Executable host process.
 - `test_codec_golden` (`tests/native/test_codec_golden.cpp`) - Executable test verifying wire frame golden codec.
 
 ### Header-Only Components
 
-- `include/remedy/envelopes.h`
-- `include/remedy/handle.h`
-- `include/remedy/ports/arena_port.h`
-- `include/remedy/ports/channel_port.h`
-- `include/remedy/ports/slot_port.h`
-- `include/remedy/ports/worker_port.h`
-- `include/remedy/types.h`
-- `include/remedy/wire_frame.h`
+- `include/revoke/envelopes.h`
+- `include/revoke/handle.h`
+- `include/revoke/ports/arena_port.h`
+- `include/revoke/ports/channel_port.h`
+- `include/revoke/ports/slot_port.h`
+- `include/revoke/ports/worker_port.h`
+- `include/revoke/types.h`
+- `include/revoke/wire_frame.h`
 - `src/native/core/core_objects.h`
 - `src/native/core/object_table.h`
 
@@ -105,8 +105,8 @@ To perform a clean build and run all active native tests, execute the canonical 
 - `src/native/core/object_table.cpp` (missing domain object destructor implementation)
 - `src/native/platform/win32/channel_win32.cpp` (platform IPC channel integration deferred)
 - `src/native/platform/win32/worker_win32.cpp` (platform worker process containment deferred)
-- `src/managed/Remedy.EchoWorker/Program.cs` (managed C# runtime deferred)
-- `src/managed/Remedy.EchoWorker/Remedy.EchoWorker.csproj` (managed C# project deferred)
+- `src/managed/Revoke.EchoWorker/Program.cs` (managed C# runtime deferred)
+- `src/managed/Revoke.EchoWorker/Revoke.EchoWorker.csproj` (managed C# project deferred)
 - `tests/native/test_collapse.cpp` (missing domain.h header)
 - `tests/native/test_echo_slice.cpp` (missing domain.h header)
 - `tests/native/test_object_table.cpp` (constructor C2665 mismatch)

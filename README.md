@@ -1,6 +1,6 @@
-# Remedy
+# Revoke
 
-Remedy is an experimental recovered architecture spike.
+Revoke is an experimental recovered architecture spike.
 
 - It is not currently an operational MCP server.
 - It does not currently host PowerShell.

@@ -1,6 +1,6 @@
-# Contributing to Remedy
+# Contributing to Revoke
 
-Thank you for contributing to Remedy. To preserve project governance and truthful status, all contributions must follow these standards:
+Thank you for contributing to Revoke. To preserve project governance and truthful status, all contributions must follow these standards:
 
 ## Governance & Rules
 

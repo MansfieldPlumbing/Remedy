@@ -1,40 +1,40 @@
-#ifndef REMEDY_WIRE_FRAME_H
-#define REMEDY_WIRE_FRAME_H
+#ifndef REVOKE_WIRE_FRAME_H
+#define REVOKE_WIRE_FRAME_H
 
-#include "remedy/types.h"
+#include "revoke/types.h"
 #include <string.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define REMEDY_WIRE_MAGIC         0x52454D44U // "REMD"
-#define REMEDY_WIRE_VERSION       1U
-#define REMEDY_WIRE_HEADER_SIZE   36U
-#define REMEDY_MAX_PAYLOAD_SIZE   (1024U * 1024U) // 1 MB max payload safety limit
+#define REVOKE_WIRE_MAGIC         0x52454D44U // "REMD"
+#define REVOKE_WIRE_VERSION       1U
+#define REVOKE_WIRE_HEADER_SIZE   36U
+#define REVOKE_MAX_PAYLOAD_SIZE   (1024U * 1024U) // 1 MB max payload safety limit
 
 typedef enum {
-    REMEDY_WIRE_KIND_REQUEST     = 1,
-    REMEDY_WIRE_KIND_COMPLETION  = 2,
-    REMEDY_WIRE_KIND_PING        = 3,
-    REMEDY_WIRE_KIND_PONG        = 4,
-    REMEDY_WIRE_KIND_QUIESCE     = 5,
-    REMEDY_WIRE_KIND_QUIESCE_ACK = 6
-} remedy_wire_kind_t;
+    REVOKE_WIRE_KIND_REQUEST     = 1,
+    REVOKE_WIRE_KIND_COMPLETION  = 2,
+    REVOKE_WIRE_KIND_PING        = 3,
+    REVOKE_WIRE_KIND_PONG        = 4,
+    REVOKE_WIRE_KIND_QUIESCE     = 5,
+    REVOKE_WIRE_KIND_QUIESCE_ACK = 6
+} revoke_wire_kind_t;
 
 typedef struct {
-    uint32_t magic;         // REMEDY_WIRE_MAGIC
-    uint16_t version;       // REMEDY_WIRE_VERSION
-    uint16_t kind;          // remedy_wire_kind_t
-    uint16_t header_len;    // REMEDY_WIRE_HEADER_SIZE (36)
+    uint32_t magic;         // REVOKE_WIRE_MAGIC
+    uint16_t version;       // REVOKE_WIRE_VERSION
+    uint16_t kind;          // revoke_wire_kind_t
+    uint16_t header_len;    // REVOKE_WIRE_HEADER_SIZE (36)
     uint16_t reserved;      // 0
     uint32_t payload_len;   // length of payload buffer
     uint64_t request_id;    // monotonic request identifier
     uint64_t domain_handle; // owning domain 64-bit handle
     uint32_t checksum;      // Adler32 payload checksum
-} remedy_wire_frame_header_t;
+} revoke_wire_frame_header_t;
 
-static inline uint32_t remedy_adler32(const uint8_t* data, size_t len) {
+static inline uint32_t revoke_adler32(const uint8_t* data, size_t len) {
     uint32_t a = 1, b = 0;
     for (size_t i = 0; i < len; ++i) {
         a = (a + data[i]) % 65521;
@@ -44,7 +44,7 @@ static inline uint32_t remedy_adler32(const uint8_t* data, size_t len) {
 }
 
 /* Explicit Little-Endian Serialization */
-static inline void remedy_wire_frame_encode(const remedy_wire_frame_header_t* hdr, uint8_t out[36]) {
+static inline void revoke_wire_frame_encode(const revoke_wire_frame_header_t* hdr, uint8_t out[36]) {
     // magic (0..3)
     out[0] = (uint8_t)(hdr->magic & 0xFF);
     out[1] = (uint8_t)((hdr->magic >> 8) & 0xFF);
@@ -101,8 +101,8 @@ static inline void remedy_wire_frame_encode(const remedy_wire_frame_header_t* hd
 }
 
 /* Explicit Little-Endian Deserialization */
-static inline remedy_err_t remedy_wire_frame_decode(const uint8_t in[36], remedy_wire_frame_header_t* hdr) {
-    if (!in || !hdr) return REMEDY_ERR_INVALID_ARGUMENT;
+static inline revoke_err_t revoke_wire_frame_decode(const uint8_t in[36], revoke_wire_frame_header_t* hdr) {
+    if (!in || !hdr) return REVOKE_ERR_INVALID_ARGUMENT;
 
     hdr->magic = ((uint32_t)in[0]) |
                  (((uint32_t)in[1]) << 8) |
@@ -150,17 +150,17 @@ static inline remedy_err_t remedy_wire_frame_decode(const uint8_t in[36], remedy
                     (((uint32_t)in[35]) << 24);
 
     // Hardened Header Validation
-    if (hdr->magic != REMEDY_WIRE_MAGIC) return REMEDY_ERR_IPC_FAILURE;
-    if (hdr->version != REMEDY_WIRE_VERSION) return REMEDY_ERR_IPC_FAILURE;
-    if (hdr->header_len != REMEDY_WIRE_HEADER_SIZE) return REMEDY_ERR_IPC_FAILURE;
-    if (hdr->payload_len > REMEDY_MAX_PAYLOAD_SIZE) return REMEDY_ERR_INVALID_ARGUMENT;
-    if (hdr->kind < REMEDY_WIRE_KIND_REQUEST || hdr->kind > REMEDY_WIRE_KIND_QUIESCE_ACK) return REMEDY_ERR_IPC_FAILURE;
+    if (hdr->magic != REVOKE_WIRE_MAGIC) return REVOKE_ERR_IPC_FAILURE;
+    if (hdr->version != REVOKE_WIRE_VERSION) return REVOKE_ERR_IPC_FAILURE;
+    if (hdr->header_len != REVOKE_WIRE_HEADER_SIZE) return REVOKE_ERR_IPC_FAILURE;
+    if (hdr->payload_len > REVOKE_MAX_PAYLOAD_SIZE) return REVOKE_ERR_INVALID_ARGUMENT;
+    if (hdr->kind < REVOKE_WIRE_KIND_REQUEST || hdr->kind > REVOKE_WIRE_KIND_QUIESCE_ACK) return REVOKE_ERR_IPC_FAILURE;
 
-    return REMEDY_OK;
+    return REVOKE_OK;
 }
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif // REMEDY_WIRE_FRAME_H
+#endif // REVOKE_WIRE_FRAME_H

@@ -12,13 +12,13 @@
 3. **Deterministic Single-Shared Domain Collapse**
    - Exactly one thread performs collapse body via `compare_exchange(0, 1)`.
    - Child slots are atomically revoked FIRST at the start of collapse.
-   - `REMEDY_DOMAIN_DEAD` is reported ONLY after worker death is verified. If worker termination fails, domain enters `REMEDY_DOMAIN_FAILED`.
+   - `REVOKE_DOMAIN_DEAD` is reported ONLY after worker death is verified. If worker termination fails, domain enters `REVOKE_DOMAIN_FAILED`.
 
 4. **Job Object Containment Guarantee**
    - Worker processes start `CREATE_SUSPENDED` inside a Job Object configured with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`.
    - Closing the Job Object handle guarantees death of the complete descendant process tree.
 
 5. **Hardened Little-Endian Wire Codec & Dispatcher Guards**
-   - 36-byte little-endian header codec (`remedy_wire_frame_encode` / `remedy_wire_frame_decode`).
+   - 36-byte little-endian header codec (`revoke_wire_frame_encode` / `revoke_wire_frame_decode`).
    - Adler32 payload checksum verification.
-   - Dispatcher rejects completions for collapsed domains with `REMEDY_ERR_LATE_COMPLETION`.
+   - Dispatcher rejects completions for collapsed domains with `REVOKE_ERR_LATE_COMPLETION`.

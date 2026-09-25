@@ -1,46 +1,46 @@
-#ifndef REMEDY_CORE_OBJECTS_H
-#define REMEDY_CORE_OBJECTS_H
+#ifndef REVOKE_CORE_OBJECTS_H
+#define REVOKE_CORE_OBJECTS_H
 
-#include "remedy/types.h"
-#include "remedy/handle.h"
-#include "remedy/ports/worker_port.h"
-#include "remedy/ports/channel_port.h"
+#include "revoke/types.h"
+#include "revoke/handle.h"
+#include "revoke/ports/worker_port.h"
+#include "revoke/ports/channel_port.h"
 
-namespace remedy {
+namespace revoke {
 
 class domain;
 
 class worker_object {
 public:
-    explicit worker_object(remedy_worker_token_t token) : token_(token) {}
+    explicit worker_object(revoke_worker_token_t token) : token_(token) {}
     ~worker_object() {
-        if (token_ != REMEDY_INVALID_WORKER_TOKEN) {
+        if (token_ != REVOKE_INVALID_WORKER_TOKEN) {
             worker_port_destroy(token_);
-            token_ = REMEDY_INVALID_WORKER_TOKEN;
+            token_ = REVOKE_INVALID_WORKER_TOKEN;
         }
     }
 
-    remedy_worker_token_t token() const { return token_; }
+    revoke_worker_token_t token() const { return token_; }
 
 private:
-    remedy_worker_token_t token_{REMEDY_INVALID_WORKER_TOKEN};
+    revoke_worker_token_t token_{REVOKE_INVALID_WORKER_TOKEN};
 };
 
 class channel_object {
 public:
-    explicit channel_object(remedy_channel_token_t token) : token_(token) {}
+    explicit channel_object(revoke_channel_token_t token) : token_(token) {}
     ~channel_object() {
-        if (token_ != REMEDY_INVALID_CHANNEL_TOKEN) {
+        if (token_ != REVOKE_INVALID_CHANNEL_TOKEN) {
             channel_port_close(token_);
             channel_port_destroy(token_);
-            token_ = REMEDY_INVALID_CHANNEL_TOKEN;
+            token_ = REVOKE_INVALID_CHANNEL_TOKEN;
         }
     }
 
-    remedy_channel_token_t token() const { return token_; }
+    revoke_channel_token_t token() const { return token_; }
 
 private:
-    remedy_channel_token_t token_{REMEDY_INVALID_CHANNEL_TOKEN};
+    revoke_channel_token_t token_{REVOKE_INVALID_CHANNEL_TOKEN};
 };
 
 class domain_object {
@@ -54,6 +54,6 @@ private:
     domain* domain_ptr_{nullptr};
 };
 
-} // namespace remedy
+} // namespace revoke
 
-#endif // REMEDY_CORE_OBJECTS_H
+#endif // REVOKE_CORE_OBJECTS_H
